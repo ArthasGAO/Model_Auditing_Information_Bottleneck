@@ -1,0 +1,33 @@
+Scenario_Name: CIFAR-100_ResNet-18_25000_42_1.0
+
+Victim:
+  Model_Name: CIFAR-100_ResNet-18_25000
+  Model: ResNet-18
+  Dataset:
+    name: CIFAR-100
+    normalization: cifar100
+    img_size: 32
+    train_transforms:
+      - {name: RandomCrop, params: {size: 32, padding: 4}}
+      - {name: RandomHorizontalFlip, params: {p: 0.5}}
+      - {name: ToTensor}
+      - {name: Normalize}
+    test_transforms:
+      - {name: ToTensor}
+      - {name: Normalize}
+    group_size: 25000
+
+Negative Suspect:
+  Model: ResNet-18
+  State: best
+  Model_Path:
+    - at_train_new/CIFAR-100_ResNet-18_25000_42_0.0_FGSM_eps=0.03_atseed=42
+    - at_train_new/CIFAR-100_ResNet-18_25000_42_0.0_FGSM_eps=0.01_atseed=42
+    - at_train_new/CIFAR-100_ResNet-18_25000_42_0.0_FGSM_eps=0.005_atseed=42
+    
+
+Attack:
+  name: PGD
+  eps: 0.03
+  steps: 10
+  step_size: 0.003

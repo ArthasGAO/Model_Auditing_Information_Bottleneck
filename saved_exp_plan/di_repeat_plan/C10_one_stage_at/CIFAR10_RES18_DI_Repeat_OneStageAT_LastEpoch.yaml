@@ -1,0 +1,63 @@
+# Repeated DI (main_DI_repeat.py / main_DI_repeat_paper.py) -- suite C10_one_stage_at.
+# Victim: CIFAR-10_ResNet-18_25000 (seed 42, group_A 25000). Suspects: every model derived from this
+# victim with a ONE-STAGE adversarial term during the attack (L = L_family(x) + 1 * L_family(x_adv),
+# PGD-10 at eps 2/255, 4/255, 8/255), each at its LAST epoch:
+#   FT-AL    9 run(s) in saved_models/ft_at, epoch_24.pth (25 epochs; saved_exp_plan/ft_at_plan/CIFAR10_RES18_FT_Same_25000_ATPGD8.yaml)
+#   KD       3 run(s) in saved_models/kd_at/kd_at, epoch_199.pth (200 epochs; saved_exp_plan/kd_at_plan/CIFAR10_RES18to18_KD_ATPGD8.yaml)
+#   Knockoff 3 run(s) in saved_models/extraction_at, epoch_159.pth (160 epochs; saved_exp_plan/extraction_at_plan/CIFAR10_RES18_KNOCKOFF_Same10_Same18_ATPGD8.yaml)
+# Last epochs are named explicitly (State: last picks the newest file by mtime). Every folder also
+# keeps best_epoch.pth (primary pick of the training scripts) and best_rob_epoch.pth.
+# All checkpoints are plain ResNet-18 state dicts, fed raw [0,1] images through NormalizedModel.
+# Supersedes suite C10_ft_at (its 9 FT-AL cases are the first block here; seeds depend only on
+# victim / case / round, so those 9 rows are identical in both suites).
+Scenario_Name: CIFAR-10_ResNet-18_25000_DI_Repeat_OneStageAT_LastEpoch
+Victim:
+  Model_Name: CIFAR-10_ResNet-18_25000
+  Model: ResNet-18
+  Seed: 42
+  Overlap: 1.0
+  Dataset:
+    name: CIFAR-10
+    normalization: cifar10
+    img_size: 32
+    group_size: 25000
+    download: false
+DI:
+  N_Train_Samples: 1000
+  N_Test_Samples:
+  - 1000
+  Alpha: 0.05
+Positive:
+# --- FT-AL
+- Model: ResNet-18
+  State: last
+  Checkpoint: epoch_24.pth
+  Require_Checkpoints: true
+  Model_Path:
+  - ft_at/CIFAR-10_ResNet-18_25000_Same_25000_42_1.0_FT-AL_ftsize=25000_ftseed=0_ATPGD_eps=0.007843_steps=10_lambda=1_bn=frozen_run=v1
+  - ft_at/CIFAR-10_ResNet-18_25000_Same_25000_42_1.0_FT-AL_ftsize=25000_ftseed=0_ATPGD_eps=0.015686_steps=10_lambda=1_bn=frozen_run=v1
+  - ft_at/CIFAR-10_ResNet-18_25000_Same_25000_42_1.0_FT-AL_ftsize=25000_ftseed=0_ATPGD_eps=0.031373_steps=10_lambda=1_bn=frozen_run=v1
+  - ft_at/CIFAR-10_ResNet-18_25000_Same_25000_42_1.0_FT-AL_ftsize=25000_ftseed=1_ATPGD_eps=0.007843_steps=10_lambda=1_bn=frozen_run=v1
+  - ft_at/CIFAR-10_ResNet-18_25000_Same_25000_42_1.0_FT-AL_ftsize=25000_ftseed=1_ATPGD_eps=0.015686_steps=10_lambda=1_bn=frozen_run=v1
+  - ft_at/CIFAR-10_ResNet-18_25000_Same_25000_42_1.0_FT-AL_ftsize=25000_ftseed=1_ATPGD_eps=0.031373_steps=10_lambda=1_bn=frozen_run=v1
+  - ft_at/CIFAR-10_ResNet-18_25000_Same_25000_42_1.0_FT-AL_ftsize=25000_ftseed=2_ATPGD_eps=0.007843_steps=10_lambda=1_bn=frozen_run=v1
+  - ft_at/CIFAR-10_ResNet-18_25000_Same_25000_42_1.0_FT-AL_ftsize=25000_ftseed=2_ATPGD_eps=0.015686_steps=10_lambda=1_bn=frozen_run=v1
+  - ft_at/CIFAR-10_ResNet-18_25000_Same_25000_42_1.0_FT-AL_ftsize=25000_ftseed=2_ATPGD_eps=0.031373_steps=10_lambda=1_bn=frozen_run=v1
+# --- KD
+- Model: ResNet-18
+  State: last
+  Checkpoint: epoch_199.pth
+  Require_Checkpoints: true
+  Model_Path:
+  - kd_at/kd_at/CIFAR-10_ResNet-18to18_25000_KD_0_0.0_ATPGD_eps=0.007843_steps=10_lambda=1_bn=both_run=v1
+  - kd_at/kd_at/CIFAR-10_ResNet-18to18_25000_KD_0_0.0_ATPGD_eps=0.015686_steps=10_lambda=1_bn=both_run=v1
+  - kd_at/kd_at/CIFAR-10_ResNet-18to18_25000_KD_0_0.0_ATPGD_eps=0.031373_steps=10_lambda=1_bn=both_run=v1
+# --- Knockoff
+- Model: ResNet-18
+  State: last
+  Checkpoint: epoch_159.pth
+  Require_Checkpoints: true
+  Model_Path:
+  - extraction_at/CIFAR-10_ResNet-18_25000_Knockoff_Same10_Same18_0_1.0_ATPGD_eps=0.007843_steps=10_lambda=1_bn=both_inner=hard_run=v1
+  - extraction_at/CIFAR-10_ResNet-18_25000_Knockoff_Same10_Same18_0_1.0_ATPGD_eps=0.015686_steps=10_lambda=1_bn=both_inner=hard_run=v1
+  - extraction_at/CIFAR-10_ResNet-18_25000_Knockoff_Same10_Same18_0_1.0_ATPGD_eps=0.031373_steps=10_lambda=1_bn=both_inner=hard_run=v1

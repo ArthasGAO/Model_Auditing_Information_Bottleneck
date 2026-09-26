@@ -1,0 +1,91 @@
+# ======================================================================
+# Four-baseline detection of the CIFAR-100 post-hoc AT models (driver: run_four_baselines_posthoc.py)
+#
+# Victim: CIFAR-100 ResNet-18, seed 42, group_A 25000 (72.24% clean). Every victim-side asset below
+# already exists and is reused, not regenerated (paths are built by the entry points' helpers):
+#   IPGuard   Indices/CIFAR-100/IPGuard/victim=ResNet-18_CIFAR-100_25000_seed=42_overlap=1.0_k=5_size=100/{TR,TL,RR,RL}.pt
+#             all four configs recorded; decision on TR (main_IPGUARD_eval.IPGUARD_CONFIGS evaluates
+#             TR only since 2026-09-13): Stolen = TR > Tau, Tau = max TR matching rate of the 10
+#             CIFAR-100 RN18 overlap-0.0 negatives in saved_logs/at_eval/IPGuard/master.csv
+#             (2026-09-23: 0.05; the four-config mean would give 0.03)
+#   DeepJudge Indices/adv_examples/CIFAR-100_ResNet-18_PGD_eps=0.03_step_size=0.003_steps=10.pt
+#             thresholds saved_logs/at_eval/DeepJudge/Threshold/{RobD,JSD}/victim=ResNet-18_CIFAR-100_...
+#             (19 CIFAR-100 negatives; tau_RobD 0.248, tau_JSD 0.104)
+#   ADV_TRA   results/advtra1/CIFAR-100_ResNet-18_25000_42_1.0/fingerprints/cifar10/trajectory_8
+#             ("cifar10" is main_adv_tra's hard-coded folder label, not the data set); settings of the
+#             CIFAR-10 cache: 100 trajectories, length 8, tra_classes 10 (9 hops), threshold 0.5.
+#             NOT AVAILABLE YET: extraction through main_adv_tra_pos on 2026-09-23 produced 0
+#             trajectories in 50 base-sample attempts (~25 s each); every attempt aborted with
+#             "gradient is too large" (a hop's step size grew past 1.0 without reaching the random
+#             target class among 100): 22 failed at hop 1, 14 at hop 2, 7 at hop 3, 3 at hop 5,
+#             2 at hop 6. Log kept as .../trajectory_8/extraction_log_failed_len8_2026-09-23.txt.
+#             Hence ADV_TRA is left out of Methods; it needs a decision on CIFAR-100 settings
+#             (official repo default length is 4, tra_classes 10) before --prepare-advtra.
+#             No CIFAR-100 ADV_TRA negatives exist either.
+#   DI        saved_models/di_regressor/victim=ResNet-18_CIFAR-100_25000_seed=42_overlap=1.0_n=1000_clean.pt
+#             (self-implemented clean protocol of main_DI_eval, n = 1000 / 1000, alpha 0.05).
+#             No CIFAR-100 DI negatives exist either.
+#
+# Case sets (select with --sets; default sources + best_clean):
+#   sources     the three models BEFORE post-hoc AT (control: detected before AT?)
+#   best_clean  the primary post-hoc AT checkpoint of every finished run
+#   trajectory  epoch_-1 (= source) ... epoch_29 of every finished run (31 per run)
+# Training-run names are rebuilt from the training plan by main_at_posthoc.expand_plan; a run is
+# picked up once its epoch_29.pth exists (runs from the other machine: copy them back, re-run).
+# ======================================================================
+Victim:
+  Model_Name: CIFAR-100_ResNet-18_25000
+  Model: ResNet-18
+  Seed: 42
+  Overlap: 1.0
+  Dataset:
+    name: CIFAR-100
+    normalization: cifar100
+    img_size: 32
+    group_size: 25000
+    download: false
+
+Methods: [Utility, IPGuard, DeepJudge, DI]      # add ADV_TRA once its CIFAR-100 fingerprint exists
+
+Baselines:
+  IPGuard:
+    k: 5
+    Size: 100
+    Decision: TR          # TR | TL | RR | RL | Mean
+    Negative_Master: saved_logs/at_eval/IPGuard/master.csv
+  DeepJudge:
+    Attack: {name: PGD, eps: 0.03, steps: 10, step_size: 0.003}
+    Batch_Size: 256
+  ADV_TRA:
+    Fingerprint_Root: CIFAR-100_ResNet-18_25000_42_1.0
+    Threshold: 0.5
+  DI:
+    N_Train_Samples: 1000
+    N_Test_Samples: 1000
+    Alpha: 0.05
+
+Case_Sets:
+  sources:
+    Stage: source
+    Model: ResNet-18
+    Checkpoint: best_epoch.pth
+    Model_Path:
+      - ft_final/CIFAR-100_ResNet-18_25000_Same_25000_42_1.0_FT-AL_ftsize=25000_ftseed=0
+      - kd_final/CIFAR-100_ResNet-18to18_25000_DKD_0_0.0
+      - extraction_final/CIFAR-100_ResNet-18_25000_Knockoff_Same100_Same18_0_1.0
+  best_clean:
+    Stage: post_at
+    Model: ResNet-18
+    Checkpoint: best_clean_epoch.pth
+    From_Training_Plan: saved_exp_plan/at_posthoc_plan/CIFAR100_RES18_PostAT_FTAL_DKD_Knockoff.yaml
+    AT_Seeds: [2]          # the formal runs were trained with --seeds 2 (folder suffix _atseed=2)
+    Run_Tag: v1
+  trajectory:
+    Stage: post_at_epoch
+    Model: ResNet-18
+    State: all
+    From_Training_Plan: saved_exp_plan/at_posthoc_plan/CIFAR100_RES18_PostAT_FTAL_DKD_Knockoff.yaml
+    AT_Seeds: [2]          # the formal runs were trained with --seeds 2 (folder suffix _atseed=2)
+    Run_Tag: v1
+
+Evaluation_Output: saved_logs/at_eval/posthoc_c100_4baselines

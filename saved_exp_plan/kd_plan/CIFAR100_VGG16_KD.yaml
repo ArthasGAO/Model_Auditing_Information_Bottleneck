@@ -1,0 +1,62 @@
+Scenario_Name: CIFAR-100_VGG16to8_40000
+
+Dataset:
+  name: CIFAR-100
+  normalization: cifar100
+  img_size: 32
+  train_transforms:
+    - {name: RandomCrop, params: {size: 32, padding: 4}}
+    - {name: RandomHorizontalFlip, params: {p: 0.5}}
+    - {name: ToTensor}
+    - {name: Normalize}
+  test_transforms:
+    - {name: ToTensor}
+    - {name: Normalize}
+  group_size: 40000
+
+Teacher_Model: 
+  teacher_name: VGG16
+  teacher_ckpt: "./saved_models/vanilla/CIFAR-100_VGG16_40000_42_1.0/best_epoch.pth"
+
+Student_Model: 
+  student_name: VGG8
+
+Optimizer:   
+  name: SGD
+  params:
+    lr: 0.1
+    momentum: 0.9
+    nesterov: true
+    weight_decay: 0.0005
+
+Distillation:
+  - name: KD
+    params:
+      TEMPERATURE: 4
+      CE_WEIGHT: 0.1
+      KD_WEIGHT: 0.9
+  
+  - name: DKD
+    params:
+      CE_WEIGHT: 1.0
+      ALPHA: 1.0
+      BETA: 8.0
+      T: 4.0
+      WARMUP: 20
+
+  - name: FitNet
+    params:
+      HINT_LAYER: 2
+      INPUT_SIZE: 32
+      CE_WEIGHT: 1.0
+      FEAT_WEIGHT: 100.0
+
+
+Scheduler:
+  name: CosineAnnealingLR
+  params:
+    T_max: auto # <-- dynamic: same as the epochs set for this strategy
+    eta_min: 0.0001
+
+Epochs: 200
+BatchSize: 128

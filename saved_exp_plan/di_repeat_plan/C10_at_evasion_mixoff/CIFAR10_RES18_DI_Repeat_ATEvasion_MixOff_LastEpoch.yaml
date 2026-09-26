@@ -1,0 +1,94 @@
+# Repeated DI (main_DI_repeat.py / main_DI_repeat_paper.py) -- suite C10_at_evasion_mixoff.
+# Victim: CIFAR-10_ResNet-18_25000 (seed 42, group_A 25000). Suspects: every mix=off model in
+# saved_models/at_evasion = post-hoc PGD adversarial training of three extraction clones of the victim
+# (DFMS Cross100-40C Same18, Knockoff Cross100 Same18, Knockoff Same10 Same18; clone seed 0):
+#   default AT       eps 2/255, 4/255, 8/255 (+ 12/255 for DFMS), atseed 0, 30 epochs -> epoch_29.pth
+#   bn=adv, 30 ep    eps 8/255, atseed 0..2                                    -> epoch_29.pth
+#   bn=adv, 50 ep    eps 8/255, atseed 0..2                                    -> epoch_49.pth
+# Checkpoint: LAST epoch (named explicitly; State: last picks the newest file by mtime), as in the
+# other AT suites. Every folder also has best_clean_epoch.pth / best_rob_epoch.pth.
+# Excluded (no epoch_N.pth, only best_clean / best_rob): CIFAR-10_ResNet-18_25000_DFMS_Cross100-40C_Same18_0_1.0_PGD_eps=0.007843_steps=10_bn=adv_atseed=0_mix=off
+# Checkpoints are NormalizedModel state dicts (base_model. + CIFAR-10 mean/std); the loader strips the
+# wrapper and re-wraps with the dataset's normalization (checked identical).
+Scenario_Name: CIFAR-10_ResNet-18_25000_DI_Repeat_ATEvasion_MixOff_LastEpoch
+Victim:
+  Model_Name: CIFAR-10_ResNet-18_25000
+  Model: ResNet-18
+  Seed: 42
+  Overlap: 1.0
+  Dataset:
+    name: CIFAR-10
+    normalization: cifar10
+    img_size: 32
+    group_size: 25000
+    download: false
+DI:
+  N_Train_Samples: 1000
+  N_Test_Samples:
+  - 1000
+  Alpha: 0.05
+Positive:
+# --- DFMS_Cross100-40C_Same18_0_1.0, epoch_29
+- Model: ResNet-18
+  State: last
+  Checkpoint: epoch_29.pth
+  Require_Checkpoints: true
+  Model_Path:
+  - at_evasion/CIFAR-10_ResNet-18_25000_DFMS_Cross100-40C_Same18_0_1.0_PGD_eps=0.007843_steps=10_atseed=0_mix=off
+  - at_evasion/CIFAR-10_ResNet-18_25000_DFMS_Cross100-40C_Same18_0_1.0_PGD_eps=0.015686_steps=10_atseed=0_mix=off
+  - at_evasion/CIFAR-10_ResNet-18_25000_DFMS_Cross100-40C_Same18_0_1.0_PGD_eps=0.031373_steps=10_atseed=0_mix=off
+  - at_evasion/CIFAR-10_ResNet-18_25000_DFMS_Cross100-40C_Same18_0_1.0_PGD_eps=0.031373_steps=10_bn=adv_atn=25000_atepochs=30_run=v1_atseed=0_mix=off
+  - at_evasion/CIFAR-10_ResNet-18_25000_DFMS_Cross100-40C_Same18_0_1.0_PGD_eps=0.031373_steps=10_bn=adv_atn=25000_atepochs=30_run=v1_atseed=1_mix=off
+  - at_evasion/CIFAR-10_ResNet-18_25000_DFMS_Cross100-40C_Same18_0_1.0_PGD_eps=0.031373_steps=10_bn=adv_atn=25000_atepochs=30_run=v1_atseed=2_mix=off
+  - at_evasion/CIFAR-10_ResNet-18_25000_DFMS_Cross100-40C_Same18_0_1.0_PGD_eps=0.047059_steps=10_atseed=0_mix=off
+# --- DFMS_Cross100-40C_Same18_0_1.0, epoch_49
+- Model: ResNet-18
+  State: last
+  Checkpoint: epoch_49.pth
+  Require_Checkpoints: true
+  Model_Path:
+  - at_evasion/CIFAR-10_ResNet-18_25000_DFMS_Cross100-40C_Same18_0_1.0_PGD_eps=0.031373_steps=10_bn=adv_atn=25000_atepochs=50_run=v1_atseed=0_mix=off
+  - at_evasion/CIFAR-10_ResNet-18_25000_DFMS_Cross100-40C_Same18_0_1.0_PGD_eps=0.031373_steps=10_bn=adv_atn=25000_atepochs=50_run=v1_atseed=1_mix=off
+  - at_evasion/CIFAR-10_ResNet-18_25000_DFMS_Cross100-40C_Same18_0_1.0_PGD_eps=0.031373_steps=10_bn=adv_atn=25000_atepochs=50_run=v1_atseed=2_mix=off
+# --- Knockoff_Cross100_Same18_0_1.0, epoch_29
+- Model: ResNet-18
+  State: last
+  Checkpoint: epoch_29.pth
+  Require_Checkpoints: true
+  Model_Path:
+  - at_evasion/CIFAR-10_ResNet-18_25000_Knockoff_Cross100_Same18_0_1.0_PGD_eps=0.007843_steps=10_atseed=0_mix=off
+  - at_evasion/CIFAR-10_ResNet-18_25000_Knockoff_Cross100_Same18_0_1.0_PGD_eps=0.015686_steps=10_atseed=0_mix=off
+  - at_evasion/CIFAR-10_ResNet-18_25000_Knockoff_Cross100_Same18_0_1.0_PGD_eps=0.031373_steps=10_atseed=0_mix=off
+  - at_evasion/CIFAR-10_ResNet-18_25000_Knockoff_Cross100_Same18_0_1.0_PGD_eps=0.031373_steps=10_bn=adv_atn=25000_atepochs=30_run=v1_atseed=0_mix=off
+  - at_evasion/CIFAR-10_ResNet-18_25000_Knockoff_Cross100_Same18_0_1.0_PGD_eps=0.031373_steps=10_bn=adv_atn=25000_atepochs=30_run=v1_atseed=1_mix=off
+  - at_evasion/CIFAR-10_ResNet-18_25000_Knockoff_Cross100_Same18_0_1.0_PGD_eps=0.031373_steps=10_bn=adv_atn=25000_atepochs=30_run=v1_atseed=2_mix=off
+# --- Knockoff_Cross100_Same18_0_1.0, epoch_49
+- Model: ResNet-18
+  State: last
+  Checkpoint: epoch_49.pth
+  Require_Checkpoints: true
+  Model_Path:
+  - at_evasion/CIFAR-10_ResNet-18_25000_Knockoff_Cross100_Same18_0_1.0_PGD_eps=0.031373_steps=10_bn=adv_atn=25000_atepochs=50_run=v1_atseed=0_mix=off
+  - at_evasion/CIFAR-10_ResNet-18_25000_Knockoff_Cross100_Same18_0_1.0_PGD_eps=0.031373_steps=10_bn=adv_atn=25000_atepochs=50_run=v1_atseed=1_mix=off
+  - at_evasion/CIFAR-10_ResNet-18_25000_Knockoff_Cross100_Same18_0_1.0_PGD_eps=0.031373_steps=10_bn=adv_atn=25000_atepochs=50_run=v1_atseed=2_mix=off
+# --- Knockoff_Same10_Same18_0_1.0, epoch_29
+- Model: ResNet-18
+  State: last
+  Checkpoint: epoch_29.pth
+  Require_Checkpoints: true
+  Model_Path:
+  - at_evasion/CIFAR-10_ResNet-18_25000_Knockoff_Same10_Same18_0_1.0_PGD_eps=0.007843_steps=10_atseed=0_mix=off
+  - at_evasion/CIFAR-10_ResNet-18_25000_Knockoff_Same10_Same18_0_1.0_PGD_eps=0.015686_steps=10_atseed=0_mix=off
+  - at_evasion/CIFAR-10_ResNet-18_25000_Knockoff_Same10_Same18_0_1.0_PGD_eps=0.031373_steps=10_atseed=0_mix=off
+  - at_evasion/CIFAR-10_ResNet-18_25000_Knockoff_Same10_Same18_0_1.0_PGD_eps=0.031373_steps=10_bn=adv_atn=25000_atepochs=30_run=v1_atseed=0_mix=off
+  - at_evasion/CIFAR-10_ResNet-18_25000_Knockoff_Same10_Same18_0_1.0_PGD_eps=0.031373_steps=10_bn=adv_atn=25000_atepochs=30_run=v1_atseed=1_mix=off
+  - at_evasion/CIFAR-10_ResNet-18_25000_Knockoff_Same10_Same18_0_1.0_PGD_eps=0.031373_steps=10_bn=adv_atn=25000_atepochs=30_run=v1_atseed=2_mix=off
+# --- Knockoff_Same10_Same18_0_1.0, epoch_49
+- Model: ResNet-18
+  State: last
+  Checkpoint: epoch_49.pth
+  Require_Checkpoints: true
+  Model_Path:
+  - at_evasion/CIFAR-10_ResNet-18_25000_Knockoff_Same10_Same18_0_1.0_PGD_eps=0.031373_steps=10_bn=adv_atn=25000_atepochs=50_run=v1_atseed=0_mix=off
+  - at_evasion/CIFAR-10_ResNet-18_25000_Knockoff_Same10_Same18_0_1.0_PGD_eps=0.031373_steps=10_bn=adv_atn=25000_atepochs=50_run=v1_atseed=1_mix=off
+  - at_evasion/CIFAR-10_ResNet-18_25000_Knockoff_Same10_Same18_0_1.0_PGD_eps=0.031373_steps=10_bn=adv_atn=25000_atepochs=50_run=v1_atseed=2_mix=off

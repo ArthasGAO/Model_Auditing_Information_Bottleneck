@@ -1,0 +1,57 @@
+# ======================================================
+# RemovalNet (LOGIT-ONLY) on a CIFAR-10 / DeiT-Plain victim.
+# Run with: python main_removalnet_deit.py
+# DeiT supports decision-boundary (logit) removal only here; logit_only is forced
+# True by the runner. Uses AdamW (transformer-appropriate), timm-built deit_tiny.
+# ======================================================
+Model_Name: CIFAR-10_DeiT_Plain_25000       # victim under saved_models/vanilla/Transformer_Models/
+Scenario_Name: CIFAR-10_DeiT_Plain_25000_RemovalNet
+
+Dataset:
+  name: CIFAR-10
+  normalization: cifar10
+  img_size: 32
+  train_transforms:
+    - {name: RandomCrop, params: {size: 32, padding: 4}}
+    - {name: RandomHorizontalFlip, params: {p: 0.5}}
+    - {name: ToTensor}
+    - {name: Normalize}
+  test_transforms:
+    - {name: ToTensor}
+    - {name: Normalize}
+  group_size: 25000
+
+FT_Dataset:
+  name: CIFAR-10
+  normalization: cifar10
+  img_size: 32
+  train_transforms:
+    - {name: RandomCrop, params: {size: 32, padding: 4}}
+    - {name: RandomHorizontalFlip, params: {p: 0.5}}
+    - {name: ToTensor}
+    - {name: Normalize}
+  test_transforms:
+    - {name: ToTensor}
+    - {name: Normalize}
+  group_size: 10000
+
+Model:                                       # dict form (timm) - matches the DeiT victim build
+  model_name: deit_tiny_patch16_224
+  img_size: 32
+  patch_size: 4
+  pretrained: False
+  drop_path_rate: 0.1
+
+RemovalNet:
+  logit_only: true     # enforced by the runner regardless
+  optimizer: adamw     # transformers need AdamW, not SGD
+  ydist: l2
+  alpha: 0.8           # weight on logit-level KL removal
+  gamma: 0.2           # weight on accuracy-preserving CE
+  T: 20
+  lr: 0.0005           # AdamW lr
+  weight_decay: 0.03
+  iterations: 500
+  test_interval: 20
+  save_interval: 100
+  batch_size: 128

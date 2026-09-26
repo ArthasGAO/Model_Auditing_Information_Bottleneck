@@ -1,0 +1,41 @@
+# Dataset Inference baseline through the OFFICIAL code path (main_DI_official_eval.py).
+# Victim = CIFAR-10 ResNet-18 seed 42 (group_A, 25000). Suspect paths are
+# relative to saved_models/. Only best_epoch.pth is scored (Checkpoint field).
+# DI tests data usage: negatives with overlap 1.0 share the victim's training
+# data and are EXPECTED to be flagged; overlap 0.0 is the true DI null.
+Scenario_Name: CIFAR-10_ResNet-18_25000_42_1.0_Pos_FT_AT
+Victim:
+  Model_Name: CIFAR-10_ResNet-18_25000
+  Model: ResNet-18
+  Seed: 42
+  Overlap: 1.0
+  Dataset:
+    name: CIFAR-10
+    normalization: cifar10
+    img_size: 32
+    group_size: 25000
+    download: false
+Positive:
+- Model: ResNet-18
+  State: best
+  Checkpoint: best_epoch.pth
+  Require_Checkpoints: true
+  Model_Path:
+  - at_train_new/CIFAR-10_ResNet-18_25000_Same_10000_42_1.0_RT-AL_ftsize=10000_ftseed=0_PGD_eps=0.031373_steps=10_atseed=42
+  - at_train_new/CIFAR-10_ResNet-18_25000_Same_10000_42_1.0_RT-AL_ftsize=10000_ftseed=0_PGD_eps=0.015686_steps=10_atseed=42
+  - at_train_new/CIFAR-10_ResNet-18_25000_Same_10000_42_1.0_RT-AL_ftsize=10000_ftseed=0_PGD_eps=0.007843_steps=10_atseed=42
+  - at_train_new/CIFAR-10_ResNet-18_25000_Same_10000_42_1.0_FT-AL_ftsize=10000_ftseed=0_PGD_eps=0.031373_steps=10_atseed=42
+  - at_train_new/CIFAR-10_ResNet-18_25000_Same_10000_42_1.0_FT-AL_ftsize=10000_ftseed=0_PGD_eps=0.015686_steps=10_atseed=42
+  - at_train_new/CIFAR-10_ResNet-18_25000_Same_10000_42_1.0_FT-AL_ftsize=10000_ftseed=0_PGD_eps=0.007843_steps=10_atseed=42
+  - at_train_new/CIFAR-10_ResNet-18_25000_Same_10000_42_1.0_FT-LL_ftsize=10000_ftseed=0_PGD_eps=0.031373_steps=10_atseed=42
+  - at_train_new/CIFAR-10_ResNet-18_25000_Same_10000_42_1.0_FT-LL_ftsize=10000_ftseed=0_PGD_eps=0.015686_steps=10_atseed=42
+  - at_train_new/CIFAR-10_ResNet-18_25000_Same_10000_42_1.0_FT-LL_ftsize=10000_ftseed=0_PGD_eps=0.007843_steps=10_atseed=42
+  - at_train_new/CIFAR-10_ResNet-18_25000_Same_10000_42_1.0_RT-AL_ftsize=10000_ftseed=0_FGSM_eps=0.03_atseed=42
+  - at_train_new/CIFAR-10_ResNet-18_25000_Same_10000_42_1.0_RT-AL_ftsize=10000_ftseed=0_FGSM_eps=0.01_atseed=42
+  - at_train_new/CIFAR-10_ResNet-18_25000_Same_10000_42_1.0_RT-AL_ftsize=10000_ftseed=0_FGSM_eps=0.005_atseed=42
+  - at_train_new/CIFAR-10_ResNet-18_25000_Same_10000_42_1.0_FT-AL_ftsize=10000_ftseed=0_FGSM_eps=0.03_atseed=42
+  - at_train_new/CIFAR-10_ResNet-18_25000_Same_10000_42_1.0_FT-AL_ftsize=10000_ftseed=0_FGSM_eps=0.01_atseed=42
+  - at_train_new/CIFAR-10_ResNet-18_25000_Same_10000_42_1.0_FT-AL_ftsize=10000_ftseed=0_FGSM_eps=0.005_atseed=42
+  - at_train_new/CIFAR-10_ResNet-18_25000_Same_10000_42_1.0_FT-LL_ftsize=10000_ftseed=0_FGSM_eps=0.03_atseed=42
+  - at_train_new/CIFAR-10_ResNet-18_25000_Same_10000_42_1.0_FT-LL_ftsize=10000_ftseed=0_FGSM_eps=0.01_atseed=42
+  - at_train_new/CIFAR-10_ResNet-18_25000_Same_10000_42_1.0_FT-LL_ftsize=10000_ftseed=0_FGSM_eps=0.005_atseed=42

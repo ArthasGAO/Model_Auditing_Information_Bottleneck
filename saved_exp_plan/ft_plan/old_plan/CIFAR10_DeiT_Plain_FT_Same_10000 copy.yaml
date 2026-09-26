@@ -1,0 +1,65 @@
+# ======================================================
+# Experiment Configuration: CIFAR-10 + ResNet-18 (SGD + Cosine LR) + fine-tuning (in one subset from CIFAR-10)
+# ======================================================
+Model_Name: CIFAR-10_DeiT_Plain_25000  # this is used to load the trained model
+Scenario_Name: CIFAR-10_DeiT_Plain_25000_Same_10000_onlyRT-AL1
+
+Dataset:
+  name: CIFAR-10
+  normalization: cifar10
+  img_size: 32
+  train_transforms:
+    - {name: RandomResizedCrop, params: {size: 32, scale: [0.85, 1.0], ratio: [0.9, 1.1]}}
+    - {name: RandomHorizontalFlip, params: {p: 0.5}}
+    - {name: RandAugment, params: {num_ops: 2, magnitude: 7}}
+    - {name: ToTensor}
+    - {name: Normalize}
+    - {name: RandomErasing, params: {p: 0.15, scale: [0.02, 0.25], ratio: [0.3, 3.3]}}
+  test_transforms:
+    - {name: ToTensor}
+    - {name: Normalize}
+  group_size: 25000
+  
+
+FT_Dataset:
+  name: CIFAR-10
+  normalization: cifar10
+  img_size: 32
+  train_transforms:
+    - {name: RandomResizedCrop, params: {size: 32, scale: [0.85, 1.0], ratio: [0.9, 1.1]}}
+    - {name: RandomHorizontalFlip, params: {p: 0.5}}
+    - {name: RandAugment, params: {num_ops: 2, magnitude: 7}}
+    - {name: ToTensor}
+    - {name: Normalize}
+    - {name: RandomErasing, params: {p: 0.15, scale: [0.02, 0.25], ratio: [0.3, 3.3]}}
+  test_transforms:
+    - {name: ToTensor}
+    - {name: Normalize}
+  group_size: 10000
+  note: same
+
+
+Model:
+  model_name: deit_tiny_patch16_224
+  img_size: 32
+  patch_size: 4
+  pretrained: False
+  drop_path_rate: 0.1
+
+
+Optimizers:
+  - name: AdamW
+    strategy: RT-AL
+    params:
+      lr: 0.0001             
+      weight_decay: 0.03
+    Epochs: 80
+
+
+Scheduler:
+  name: CosineAnnealingLR
+  params:
+    T_max: auto # <-- dynamic: same as the epochs set for this strategy
+    eta_min: 0.000001
+
+BatchSize: 128

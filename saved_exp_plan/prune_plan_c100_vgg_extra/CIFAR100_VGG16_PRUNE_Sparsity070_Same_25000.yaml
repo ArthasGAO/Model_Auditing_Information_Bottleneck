@@ -1,0 +1,113 @@
+# ======================================================
+# Experiment Configuration: CIFAR-100 + VGG16 + Pruning + Restoring FT (Same distribution)
+# SUPPLEMENT to prune_plan_c100/CIFAR100_VGG16_PRUNE_Same_25000.yaml -- same
+# Scenario_Name, same victim, same optimizer, ONE extra sparsity level: 0.70.
+# Run it from its own folder (PRUNE_PLAN_DIR) so the frozen 0.2/0.8 plan is
+# never re-run; the model folders carry sparsity= in their names, so the levels
+# coexist in saved_models/pruning_final/ without colliding.
+#
+# ONE LEVEL PER FILE, ON PURPOSE. Once calculate_MI_prune.py has written rows
+# from this plan, its sha256 is part of their identity -- adding a second
+# sparsity to this file would invalidate them (that is exactly the
+# "Prune-MI identity mismatch" that hit the RES18 rows on 2026-09-21). To add
+# 0.75 later, copy this file to CIFAR100_VGG16_PRUNE_Sparsity075_Same_25000.yaml
+# and change the one number.
+# ======================================================
+#
+# WHY THIS EXISTS
+# ---------------
+# VGG16 does not survive 80% global magnitude pruning. epoch_-1 test acc is
+# 1.01% (chance), the restoring FT never moves (loss pinned at ln(100)=4.6052
+# for all 50 epochs, all 3 seeds) and both MI terms come out exactly 0.
+# Cause: a single global threshold annihilates whichever layer has the smallest
+# weights. At 0.8 that is features.15 (98.4% zeroed), and VGG has no skip
+# connection, so one dead layer kills the network. ResNet-18 is immune (the
+# identity path still carries signal: 69.01% -> 73.87%) and DeiT-Ti only gets
+# hurt (12.37% -> 60.21%).
+#
+# WHAT WAS TRIED AND REJECTED (measured pre-FT test acc, victim = 67.69%)
+# ----------------------------------------------------------------------
+#   sparing features.16 from the pruned set     14.45%  (features.15 -> 99.1%)
+#   sparing features.15+16                       1.00%  (features.14 -> 98.0%)
+#   sparing the whole last conv stage 14/15/16   1.44%  (features.12 -> 92.9%)
+#   sparing stages 4+5 (features.10..16)        29.61%  but only 10.9% of the
+#                                                       model is then pruned
+#   per-layer (not global) L1 at 0.80            2.31%  (kills features.0..4,
+#                                                       which are tiny)
+# Excluding layers only moves the execution to the next-smallest layer, and it
+# also lowers the real whole-model sparsity, so every surviving variant is
+# strictly worse than simply using a lower global amount at the same real
+# sparsity (sparing features.16 = 67.4% real sparsity at 14.45%, vs plain
+# global 0.68 = 68% real sparsity at 66.14%).
+# util.prune_model_global grew an `exclude_patterns` argument during that
+# investigation, and main_prune.py / calculate_MI_prune.py honour an optional
+# `Prune_Exclude` plan key. Both are unused here and default to the original
+# behaviour.
+#
+# WHY 0.70
+# --------
+# Plain global pruning, at the highest level VGG16 clearly survives.
+# Measured cliff (pre-FT test acc, no fine-tuning):
+#   0.60 -> 67.37    0.65 -> 67.26    0.68 -> 66.14    0.70 -> 64.67
+#   0.72 -> 59.86    0.75 -> 33.09    0.78 ->  2.36    0.80 ->  1.01
+# 0.70 costs 3.02 points before any recovery -- close to ResNet-18's -3.23 at
+# 0.8, so the two architectures start their restoring FT from comparable damage.
+# This is the first checkpoint of a walk up the cliff: if it recovers cleanly,
+# 0.75 (33.09%, still has gradient signal) is the next one worth a file.
+#
+# Optimizer is copied verbatim from the 0.2/0.8 plan (SGD 1e-4 / mom 0.9 /
+# wd 5e-4 / nesterov / 50 ep) on purpose: the only variable between the VGG16
+# pruning cells must be the sparsity.
+# ======================================================
+Model_Name: CIFAR-100_VGG16_25000
+Scenario_Name: CIFAR-100_VGG16_25000_Same_25000
+
+Dataset:
+  name: CIFAR-100
+  normalization: cifar100
+  img_size: 32
+  train_transforms:
+    - {name: RandomCrop, params: {size: 32, padding: 4}}
+    - {name: RandomHorizontalFlip, params: {p: 0.5}}
+    - {name: ToTensor}
+    - {name: Normalize}
+  test_transforms:
+    - {name: ToTensor}
+    - {name: Normalize}
+  group_size: 25000
+
+FT_Dataset:
+  name: CIFAR-100
+  normalization: cifar100
+  img_size: 32
+  train_transforms:
+    - {name: RandomCrop, params: {size: 32, padding: 4}}
+    - {name: RandomHorizontalFlip, params: {p: 0.5}}
+    - {name: ToTensor}
+    - {name: Normalize}
+  test_transforms:
+    - {name: ToTensor}
+    - {name: Normalize}
+  group_size: 25000
+  note: same
+
+Model: VGG16
+
+Optimizers:
+  - name: SGD
+    sparsity: 0.7
+    params:
+      lr: 0.0001
+      momentum: 0.9
+      weight_decay: 0.0005
+      nesterov: true
+    Epochs: 50
+
+Scheduler:
+  name: CosineAnnealingLR
+  params:
+    T_max: auto
+    eta_min: 0.000001
+
+# NOTE: not read by main_prune.py -- both DataLoaders hardcode batch_size=128.
+BatchSize: 128

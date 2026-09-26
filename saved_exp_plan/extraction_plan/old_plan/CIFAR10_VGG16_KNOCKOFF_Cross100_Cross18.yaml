@@ -1,0 +1,69 @@
+# ======================================================
+# Experiment Configuration: Knockoff Model Extraction Attack
+# Victim:     CIFAR-10 + VGG16 (pre-trained, saved_models/vanilla/CNN_Models/CIFAR-10_VGG16_25000_<seed>_1.0)
+# Substitute: ResNet-18 (different architecture w.r.t. the victim)
+# Auxiliary:  CIFAR-100 (cross domain w.r.t. the victim)
+# ======================================================
+
+Scenario_Name: CIFAR-10_VGG16_25000_Knockoff_Cross100_Cross18
+
+# Victim model configuration (used to load the pre-trained victim)
+Victim:
+  Model_Name: CIFAR-10_VGG16_25000  # folder name under saved_models/vanilla/CNN_Models/
+  Model: VGG16
+  Dataset:
+    name: CIFAR-10
+    normalization: cifar10
+    img_size: 32
+    train_transforms:
+      - {name: RandomCrop, params: {size: 32, padding: 4}}
+      - {name: RandomHorizontalFlip, params: {p: 0.5}}
+      - {name: ToTensor}
+      - {name: Normalize}
+    test_transforms:
+      - {name: ToTensor}
+      - {name: Normalize}
+    group_size: 25000
+
+# Substitute model configuration
+Substitute:
+  Model: ResNet-18
+
+# Auxiliary dataset used for querying the victim
+# Group B only, disjoint from the victim's training group A (overlap_rate = 0.0)
+Auxiliary_Dataset:
+  name: CIFAR-100
+  normalization: cifar100
+  img_size: 32
+  train_transforms:
+    - {name: RandomCrop, params: {size: 32, padding: 4}}
+    - {name: RandomHorizontalFlip, params: {p: 0.5}}
+    - {name: ToTensor}
+    - {name: Normalize}
+  test_transforms:
+    - {name: ToTensor}
+    - {name: Normalize}
+  group_size: 25000
+
+# Knockoff attack parameters
+Knockoff:
+  sampling_size: 1.0    # fraction of auxiliary data to use (1.0 = 100%)
+
+# Training configuration for the substitute model
+# Matched to the existing ResNet-18-victim CIFAR-10 runs so results are comparable.
+Optimizer:
+  name: SGD
+  params:
+    lr: 0.1
+    momentum: 0.9
+    weight_decay: 0.0005
+    nesterov: true
+
+Scheduler:
+  name: CosineAnnealingLR
+  params:
+    T_max: 160
+    eta_min: 0.000001
+
+Epochs: 160
+BatchSize: 128

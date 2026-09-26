@@ -1,0 +1,4 @@
+# Post-hoc AT source: FT-AL from the CIFAR-10 ResNet-18 victim (ft seed 0, rate 1.0)
+#   alias in the training plan: C10_RN18_Same_FT-AL_0_1.0
+#   model: ft_final/CIFAR-10_ResNet-18_25000_Same_25000_42_1.0_FT-AL_ftsize=25000_ftseed=0
+Scenario_Name: C10_RN18_Same_FT-AL

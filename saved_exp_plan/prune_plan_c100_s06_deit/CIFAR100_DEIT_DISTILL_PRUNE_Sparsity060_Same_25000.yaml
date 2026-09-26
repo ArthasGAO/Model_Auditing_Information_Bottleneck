@@ -1,0 +1,85 @@
+# ======================================================================
+# CIFAR-100 pruning at sparsity 0.6 -- CIFAR-100_DeiT_Distill_25000
+#   derived by saved_exp_plan/make_c100_prune_s06.py from
+#   saved_exp_plan/prune_plan_c100_deit/CIFAR100_DEIT_DISTILL_PRUNE_Same_25000.yaml
+#   ONLY the sparsity differs. Optimizer, epochs, scheduler, dataset,
+#   transforms and Scenario_Name are copied verbatim from that plan, so the
+#   only variable between this cell and the 0.2 cell is the sparsity.
+#
+#   AdamW lr=0.00015 x 30 ep, FT-AL
+#   driver : main_prune_deit
+#
+# Single level on purpose. main_prune.py's skip guard is per (plan, ft_seed)
+# and trains EVERY sparsity the plan lists, so keeping 0.2 in here would
+# retrain the 0.2 models that are already done. They live in the frozen source
+# plan and are not re-entered from this folder.
+#
+# Do not add a second sparsity to this file later: calculate_MI_prune.py
+# records its sha256 in every MI row, and changing the bytes invalidates them.
+# Copy it to a new _SparsityNNN_ file instead.
+# ======================================================================
+Model_Name: CIFAR-100_DeiT_Distill_25000
+Scenario_Name: CIFAR-100_DeiT_Distill_25000_Same_25000
+Dataset:
+  name: CIFAR-100
+  normalization: cifar100
+  img_size: 32
+  train_transforms: &id001
+  - name: RandomResizedCrop
+    params:
+      size: 32
+      scale:
+      - 0.85
+      - 1.0
+      ratio:
+      - 0.9
+      - 1.1
+  - name: RandomHorizontalFlip
+    params:
+      p: 0.5
+  - name: RandAugment
+    params:
+      num_ops: 2
+      magnitude: 9
+  - name: ToTensor
+  - name: Normalize
+  - name: RandomErasing
+    params:
+      p: 0.2
+      scale:
+      - 0.02
+      - 0.2
+      ratio:
+      - 0.3
+      - 3.3
+  test_transforms: &id002
+  - name: ToTensor
+  - name: Normalize
+  group_size: 25000
+FT_Dataset:
+  name: CIFAR-100
+  normalization: cifar100
+  img_size: 32
+  train_transforms: *id001
+  test_transforms: *id002
+  group_size: 25000
+  note: same
+Model:
+  model_name: deit_tiny_distilled_patch16_224
+  img_size: 32
+  patch_size: 4
+  pretrained: false
+  drop_path_rate: 0.15
+Optimizers:
+- name: AdamW
+  sparsity: 0.6
+  params:
+    lr: 0.00015
+    weight_decay: 0.05
+  Epochs: 30
+Scheduler:
+  name: CosineAnnealingLR
+  params:
+    T_max: auto
+    eta_min: 1.0e-06
+BatchSize: 128

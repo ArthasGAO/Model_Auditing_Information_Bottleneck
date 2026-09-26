@@ -1,0 +1,34 @@
+# Repeated DI (main_DI_repeat.py / main_DI_repeat_paper.py) -- suite C10_prune_at.
+# Victim: CIFAR-10_ResNet-18_25000 (seed 42, group_A 25000). Suspects: one-stage AT Prune models in
+# saved_models/pruning_at -- global L1 pruning at sparsity 0.8 + FT-AL recovery (ftseed 0), BN frozen, no BN recalibration; masks are folded into the weights (80.3% zeros), epoch_-1 = right after pruning.
+# L = L_family(x) + 1 * L_family(x_adv), PGD-10 at eps 2/255, 4/255, 8/255 (training plan saved_exp_plan/prune_at_plan/CIFAR10_RES18_PRUNE_Same_25000_ATPGD8.yaml).
+# Checkpoint: LAST epoch, epoch_49.pth (50 epochs), named explicitly because State: last picks
+# the newest file by mtime. best_epoch.pth / best_rob_epoch.pth are kept in every folder.
+# Plain ResNet-18 state dicts, fed raw [0,1] images through NormalizedModel.
+# One of four per-family one-stage AT suites: C10_ft_at, C10_kd_at, C10_extraction_at, C10_prune_at.
+Scenario_Name: CIFAR-10_ResNet-18_25000_DI_Repeat_PruneAT_LastEpoch
+Victim:
+  Model_Name: CIFAR-10_ResNet-18_25000
+  Model: ResNet-18
+  Seed: 42
+  Overlap: 1.0
+  Dataset:
+    name: CIFAR-10
+    normalization: cifar10
+    img_size: 32
+    group_size: 25000
+    download: false
+DI:
+  N_Train_Samples: 1000
+  N_Test_Samples:
+  - 1000
+  Alpha: 0.05
+Positive:
+- Model: ResNet-18
+  State: last
+  Checkpoint: epoch_49.pth
+  Require_Checkpoints: true
+  Model_Path:
+  - pruning_at/CIFAR-10_ResNet-18_25000_Same_25000_42_1.0_sparsity=0.8_FT-AL_ftsize=25000_ftseed=0_ATPGD_eps=0.007843_steps=10_lambda=1_bn=frozen_recal=none_run=v1
+  - pruning_at/CIFAR-10_ResNet-18_25000_Same_25000_42_1.0_sparsity=0.8_FT-AL_ftsize=25000_ftseed=0_ATPGD_eps=0.015686_steps=10_lambda=1_bn=frozen_recal=none_run=v1
+  - pruning_at/CIFAR-10_ResNet-18_25000_Same_25000_42_1.0_sparsity=0.8_FT-AL_ftsize=25000_ftseed=0_ATPGD_eps=0.031373_steps=10_lambda=1_bn=frozen_recal=none_run=v1

@@ -1,0 +1,58 @@
+# ======================================================
+# ABLATION: CE-ONLY (no RemovalNet removal terms).
+# ce_only=true -> loss = gamma * CE only (alpha=beta=0). This is a plain
+# fine-tune of the surrogate on the VICTIM's hard labels (y = victim argmax,
+# same as the other modes), run through the iteration-based RemovalNet loop so
+# it is directly comparable to the full / logit-only runs.
+# `layer`, `alpha`, `beta`, `T`, `poison_steps`, `shuffle_ratio` are all ignored.
+# ======================================================
+Model_Name: CIFAR-10_ResNet-18_25000
+Scenario_Name: CIFAR-10_ResNet-18_25000_RemovalNet
+
+Dataset:
+  name: CIFAR-10
+  normalization: cifar10
+  img_size: 32
+  train_transforms:
+    - {name: RandomCrop, params: {size: 32, padding: 4}}
+    - {name: RandomHorizontalFlip, params: {p: 0.5}}
+    - {name: ToTensor}
+    - {name: Normalize}
+  test_transforms:
+    - {name: ToTensor}
+    - {name: Normalize}
+  group_size: 25000
+
+FT_Dataset:
+  name: CIFAR-10
+  normalization: cifar10
+  img_size: 32
+  train_transforms:
+    - {name: RandomCrop, params: {size: 32, padding: 4}}
+    - {name: RandomHorizontalFlip, params: {p: 0.5}}
+    - {name: ToTensor}
+    - {name: Normalize}
+  test_transforms:
+    - {name: ToTensor}
+    - {name: Normalize}
+  group_size: 10000
+
+Model: ResNet-18
+
+RemovalNet:
+  ce_only: true        # <-- the ablation switch (CE only)
+  gamma: 1.0           # CE weight; 1.0 = unscaled cross-entropy (plain fine-tune)
+  layer: 2             # ignored
+  ydist: l2            # ignored
+  alpha: 0.2           # ignored
+  beta: 2.0            # ignored
+  T: 20                # ignored
+  poison_steps: 20     # ignored
+  shuffle_ratio: 0.02  # ignored
+  lr: 0.008
+  momentum: 0.9
+  weight_decay: 0.0001
+  iterations: 500
+  test_interval: 20
+  save_interval: 100
+  batch_size: 128

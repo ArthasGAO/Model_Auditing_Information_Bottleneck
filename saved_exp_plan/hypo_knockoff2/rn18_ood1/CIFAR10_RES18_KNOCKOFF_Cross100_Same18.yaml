@@ -1,0 +1,68 @@
+# ======================================================
+# Experiment Configuration: Knockoff Model Extraction Attack
+# Victim: CIFAR-10 + ResNet-18 (pre-trained)
+# Substitute: ResNet-18 (trained on victim's soft labels)
+# Auxiliary Dataset: CIFAR-10 test set (same distribution)
+# ======================================================
+
+Scenario_Name: CIFAR-10_ResNet-18_25000_Knockoff_Cross100_Same18
+
+# Victim model configuration (used to load the pre-trained victim)
+Victim:
+  Model_Name: CIFAR-10_ResNet-18_25000  # folder name under saved_models/vanilla/
+  Model: ResNet-18
+  Dataset:
+    name: CIFAR-10
+    normalization: cifar10
+    img_size: 32
+    train_transforms:
+      - {name: RandomCrop, params: {size: 32, padding: 4}}
+      - {name: RandomHorizontalFlip, params: {p: 0.5}}
+      - {name: ToTensor}
+      - {name: Normalize}
+    test_transforms:
+      - {name: ToTensor}
+      - {name: Normalize}
+    group_size: 25000
+
+# Substitute model configuration
+Substitute:
+  Model: ResNet-18
+
+# Auxiliary dataset used for querying the victim
+# Can be same-distribution or OOD
+Auxiliary_Dataset:
+  name: CIFAR-100
+  normalization: cifar100
+  img_size: 32
+  train_transforms:
+    - {name: RandomCrop, params: {size: 32, padding: 4}}
+    - {name: RandomHorizontalFlip, params: {p: 0.5}}
+    - {name: ToTensor}
+    - {name: Normalize}
+  test_transforms:
+    - {name: ToTensor}
+    - {name: Normalize}
+  group_size: 25000
+
+# Knockoff attack parameters
+Knockoff:
+  sampling_size: 1.0    # fraction of auxiliary data to use (1.0 = 100%)
+
+# Training configuration for the substitute model
+Optimizer:
+  name: SGD
+  params:
+    lr: 0.1
+    momentum: 0.9
+    weight_decay: 0.0005
+    nesterov: true
+
+Scheduler:
+  name: CosineAnnealingLR
+  params:
+    T_max: 160
+    eta_min: 0.000001
+
+Epochs: 160
+BatchSize: 128

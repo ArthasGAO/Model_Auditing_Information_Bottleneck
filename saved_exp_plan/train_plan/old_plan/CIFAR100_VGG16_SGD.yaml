@@ -1,0 +1,34 @@
+Scenario_Name: CIFAR-100_VGG16_40000
+
+Dataset:
+  name: CIFAR-100
+  normalization: cifar100
+  img_size: 32
+  train_transforms:
+    - {name: RandomCrop, params: {size: 32, padding: 4}}
+    - {name: RandomHorizontalFlip, params: {p: 0.5}}
+    - {name: ToTensor}
+    - {name: Normalize}
+  test_transforms:
+    - {name: ToTensor}
+    - {name: Normalize}
+  group_size: 40000
+
+Model: VGG16
+
+Optimizer:
+  name: SGD
+  params:
+    lr: 0.1 #0.05
+    momentum: 0.9
+    weight_decay: 0.0005
+    nesterov: True
+
+Scheduler:
+  name: CosineAnnealingLR
+  params:
+    T_max: 200      # assumes per-epoch stepping
+    eta_min: 0.000001
+
+Epochs: 200
+BatchSize: 128

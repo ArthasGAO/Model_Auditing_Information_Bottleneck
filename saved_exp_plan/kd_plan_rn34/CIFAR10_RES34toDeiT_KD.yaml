@@ -1,0 +1,87 @@
+# ======================================================
+# KD positive models - Cell A / Cell C, bigger CNN teacher -> Transformer student
+#   Teacher: ResNet-34 (victim, group_A, 25000; trained by main_train_teacher.py)
+#   Student: DeiT-Tiny  -> matches the DeiT_Plain negative pool in
+#                          vanilla/Transformer_Models
+#
+# Reference row: kd_plan_arch/CIFAR10_RES18toDeiT_KD.yaml - identical except
+# for the teacher. A CNN teacher for a ViT student is DeiT's own canonical
+# setting, so no DeiT-family teacher is used here.
+#
+# FitNet is ABSENT: a ViT emits token sequences, not conv feature maps.
+#
+# Student recipe mirrors the CIFAR-10 DeiT_Plain pool recipe: same transforms,
+# AdamW 7e-4 / wd 0.03, warmup 10 + cosine, 200 epochs, and the Augmentation
+# block passes label_smoothing 0.1 into the CE term through
+# util.build_base_criterion, so the student's CE side is bit-identical to the
+# pool's and the two differ only by the teacher term (see the RN18toDeiT plan
+# for why this matters to the MI estimator). use_mixup must stay False.
+# ======================================================
+Scenario_Name: CIFAR-10_ResNet-34toDeiT_25000
+
+Dataset:
+  name: CIFAR-10
+  normalization: cifar10
+  img_size: 32
+  train_transforms:
+    - {name: RandomResizedCrop, params: {size: 32, scale: [0.85, 1.0], ratio: [0.9, 1.1]}}
+    - {name: RandomHorizontalFlip, params: {p: 0.5}}
+    - {name: RandAugment, params: {num_ops: 2, magnitude: 7}}
+    - {name: ToTensor}
+    - {name: Normalize}
+    - {name: RandomErasing, params: {p: 0.15, scale: [0.02, 0.25], ratio: [0.3, 3.3]}}
+  test_transforms:
+    - {name: ToTensor}
+    - {name: Normalize}
+  group_size: 25000
+
+Teacher_Model:
+  teacher_name: ResNet-34
+  teacher_ckpt: "./saved_models/vanilla/CIFAR-10_ResNet-34_25000_42_1.0/best_epoch.pth"
+
+Student_Model:
+  student_name: DeiT
+  model_name: deit_tiny_patch16_224
+  img_size: 32
+  patch_size: 4
+  pretrained: False
+  drop_path_rate: 0.1
+
+Augmentation:
+  use_mixup: False
+  label_smoothing: 0.1
+
+Optimizer:
+  name: AdamW
+  params:
+    lr: 0.0007
+    betas: [0.9, 0.999]
+    eps: 1.0e-8
+    weight_decay: 0.03
+    amsgrad: False
+
+Distillation:
+  - name: KD
+    params:
+      TEMPERATURE: 4
+      CE_WEIGHT: 0.1
+      KD_WEIGHT: 0.9
+
+  - name: DKD
+    params:
+      CE_WEIGHT: 1.0
+      ALPHA: 1.0
+      BETA: 8.0
+      T: 4.0
+      WARMUP: 20
+
+Scheduler:
+  name: WarmupCosineAnnealingLR
+  params:
+    warmup_epochs: 10
+    warmup_start_factor: 0.1
+    T_max: auto
+    eta_min: 0.000001
+
+Epochs: 200
+BatchSize: 128

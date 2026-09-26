@@ -1,0 +1,63 @@
+# ======================================================
+# Experiment Configuration: CIFAR-100 + VGG16(SGD + Cosine LR) + fine-tuning (in one subset from CIFAR-10)
+# ======================================================
+
+Model_Name: CIFAR-100_VGG16_40000
+Scenario_Name: CIFAR-100_VGG16_40000_Same_10000
+
+Dataset:
+  name: CIFAR-100
+  normalization: cifar100
+  img_size: 32
+  train_transforms:
+    - {name: RandomCrop, params: {size: 32, padding: 4}}
+    - {name: RandomHorizontalFlip, params: {p: 0.5}}
+    - {name: ToTensor}
+    - {name: Normalize}
+  test_transforms:
+    - {name: ToTensor}
+    - {name: Normalize}
+  group_size: 40000
+
+FT_Dataset:
+  name: CIFAR-100
+  normalization: cifar100
+  img_size: 32
+  train_transforms:
+    - {name: RandomCrop, params: {size: 32, padding: 4}}
+    - {name: RandomHorizontalFlip, params: {p: 0.5}}
+    - {name: ToTensor}
+    - {name: Normalize}
+  test_transforms:
+    - {name: ToTensor}
+    - {name: Normalize}
+  group_size: 10000
+  note: same
+
+Model: VGG16
+
+Optimizers:
+  - name: SGD
+    strategy: FT-LL
+    params:
+      lr: 0.01
+      momentum: 0.9
+      weight_decay: 0.0005
+    Epochs: 20
+
+  - name: SGD
+    strategy: FT-AL
+    params:
+      lr: 0.0003
+      momentum: 0.9
+      weight_decay: 0.0005
+    Epochs: 60
+
+Scheduler:
+  name: CosineAnnealingLR
+  params:
+    T_max: auto
+    eta_min: 0.000001
+
+BatchSize: 128
+

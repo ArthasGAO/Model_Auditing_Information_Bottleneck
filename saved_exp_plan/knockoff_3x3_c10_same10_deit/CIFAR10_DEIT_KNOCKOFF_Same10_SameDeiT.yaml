@@ -1,0 +1,91 @@
+# ======================================================
+# Knockoff model extraction - DeiT victim
+# Victim:     CIFAR-10 + DeiT-tiny (saved_models/vanilla/Transformer_Models/
+#             CIFAR-10_DeiT_Plain_25000_<seed>_1.0), test acc ~84.15%
+# Substitute: DeiT-tiny (same architecture family w.r.t. the victim)
+# Auxiliary:  CIFAR-10 (same domain w.r.t. the victim)
+# Recipe:     AdamW 7e-4 / warmup cosine / 200 epochs (standard DeiT)
+# Run with:   main_knockoff_extraction_deit.py, then calculate_MI_extraction_deit.py
+# ======================================================
+
+Scenario_Name: CIFAR-10_DeiT_25000_Knockoff_Same10_SameDeiT
+
+Victim:
+  Model_Name: CIFAR-10_DeiT_Plain_25000   # folder under vanilla/Transformer_Models/
+  Model:
+    model_name: deit_tiny_patch16_224
+    img_size: 32          # CIFAR-native DeiT: 8x8 patches + cls = 65 tokens
+    patch_size: 4
+    pretrained: False
+    drop_path_rate: 0.1
+  Dataset:
+    name: CIFAR-10
+    normalization: cifar10
+    img_size: 32
+    # These train_transforms document how the victim was trained; the attack
+    # only ever touches this dataset's test_set / in_sample_set (both clean).
+    train_transforms:
+    - {name: RandomResizedCrop, params: {size: 32, scale: [0.85, 1.0], ratio: [0.9, 1.1]}}
+    - {name: RandomHorizontalFlip, params: {p: 0.5}}
+    - {name: RandAugment, params: {num_ops: 2, magnitude: 7}}
+    - {name: ToTensor}
+    - {name: Normalize}
+    - {name: RandomErasing, params: {p: 0.15, scale: [0.02, 0.25], ratio: [0.3, 3.3]}}
+    test_transforms:
+    - {name: ToTensor}
+    - {name: Normalize}
+    group_size: 25000
+
+Substitute:
+  Model:
+    model_name: deit_tiny_patch16_224
+    img_size: 32
+    patch_size: 4
+    pretrained: False       # trained from scratch on the stolen soft labels
+    drop_path_rate: 0.1
+
+# Attacker's query pool: group B only, disjoint from the victim's group A.
+# train_transforms here = the SURROGATE's training augmentation (recipe-matched).
+# test_transforms are used for the query itself, so soft labels are identical
+# across all four scenarios regardless of the augmentation above.
+Auxiliary_Dataset:
+  name: CIFAR-10
+  normalization: cifar10
+  img_size: 32
+  train_transforms:
+    - {name: RandomResizedCrop, params: {size: 32, scale: [0.85, 1.0], ratio: [0.9, 1.1]}}
+    - {name: RandomHorizontalFlip, params: {p: 0.5}}
+    - {name: RandAugment, params: {num_ops: 2, magnitude: 7}}
+    - {name: ToTensor}
+    - {name: Normalize}
+    - {name: RandomErasing, params: {p: 0.15, scale: [0.02, 0.25], ratio: [0.3, 3.3]}}
+  test_transforms:
+    - {name: ToTensor}
+    - {name: Normalize}
+  group_size: 25000
+
+Knockoff:
+  sampling_size: 1.0
+
+# Same recipe the DeiT victim itself was trained with (AdamW + warmup cosine).
+# NOTE: mixup and label smoothing from the vanilla plan do NOT carry over -
+# they act on hard labels, while knockoff optimises KL against soft labels.
+Optimizer:
+  name: AdamW
+  params:
+    lr: 0.0007
+    betas: [0.9, 0.999]
+    eps: 1.0e-8
+    weight_decay: 0.03
+    amsgrad: False
+
+Scheduler:
+  name: WarmupCosineAnnealingLR
+  params:
+    warmup_epochs: 10
+    warmup_start_factor: 0.1
+    T_max: 200
+    eta_min: 0.000001
+
+Epochs: 200
+BatchSize: 128

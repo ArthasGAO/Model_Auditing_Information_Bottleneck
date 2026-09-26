@@ -1,0 +1,53 @@
+# ======================================================
+# ResNet-34 victim for the "bigger teacher -> pooled student" KD row.
+#
+# Trained on group_A (rate 1.0), seed 42, with the CIFAR-10 ResNet-18 pool
+# recipe (SGD + cosine, 160 epochs, wd 5e-4) so that the victim differs from
+# the ResNet-18 victim in vanilla/CNN_Models only by depth.
+#
+# Launch with main_train_teacher.py, NOT main_train_nega.py: that entry runs
+# the DeiT pool plans in train_plan/ through main_deit_overlap and does not
+# look inside teacher_plan/.
+#
+# Scenario_Name carries no seed/rate suffix - main_overlap appends
+# _{seed}_{rate} itself. The checkpoint therefore lands in
+#   ./saved_models/vanilla/CIFAR-10_ResNet-34_25000_42_1.0/best_epoch.pth
+# which is exactly the path the saved_exp_plan/kd_plan_rn34/ plans point at.
+# best_epoch.pth is only written after 60% of the epochs
+# (main_train_nega.BEST_CKPT_START_FRAC), like every pool model.
+# ======================================================
+
+Scenario_Name: CIFAR-10_ResNet-34_25000
+
+Dataset:
+  name: CIFAR-10
+  normalization: cifar10
+  img_size: 32
+  train_transforms:
+    - {name: RandomCrop, params: {size: 32, padding: 4}}
+    - {name: RandomHorizontalFlip, params: {p: 0.5}}
+    - {name: ToTensor}
+    - {name: Normalize}
+  test_transforms:
+    - {name: ToTensor}
+    - {name: Normalize}
+  group_size: 25000 # data size used for training
+
+Model: ResNet-34
+
+Optimizer:
+  name: SGD
+  params:
+    lr: 0.1
+    momentum: 0.9
+    weight_decay: 0.0005
+    nesterov: True
+
+Scheduler:
+  name: CosineAnnealingLR
+  params:
+    T_max: 160
+    eta_min: 0.000001
+
+Epochs: 160
+BatchSize: 128

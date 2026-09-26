@@ -1,0 +1,81 @@
+# ======================================================
+# Knockoff model extraction - cross-architecture cell
+# Victim:     CIFAR-10 + DeiT-tiny (test acc ~84.15%)  (loaded from vanilla/Transformer_Models/)
+# Substitute: VGG16  (different architecture family w.r.t. the victim)
+# Auxiliary:  CIFAR-100 (cross domain w.r.t. the victim)
+# Recipe:     SGD 0.1 / cosine / 160 ep (standard VGG16)
+# Run with:   main_knockoff_extraction_deit.py, then calculate_MI_extraction_deit.py
+#             (that fork handles a DeiT on EITHER side; the CNN-only script
+#              cannot build a DeiT at all)
+# ======================================================
+
+Scenario_Name: CIFAR-10_DeiT_25000_Knockoff_Cross100_Cross16
+
+Victim:
+  Model_Name: CIFAR-10_DeiT_Plain_25000
+  Model:
+    model_name: deit_tiny_patch16_224
+    img_size: 32          # CIFAR-native DeiT: 8x8 patches + cls = 65 tokens
+    patch_size: 4
+    pretrained: False
+    drop_path_rate: 0.1
+  Dataset:
+    name: CIFAR-10
+    normalization: cifar10
+    img_size: 32
+    # Documents how the victim was trained; extraction only ever touches this
+    # dataset's test_set / in_sample_set, both of which use test_transforms.
+    train_transforms:
+    - {name: RandomResizedCrop, params: {size: 32, scale: [0.85, 1.0], ratio: [0.9, 1.1]}}
+    - {name: RandomHorizontalFlip, params: {p: 0.5}}
+    - {name: RandAugment, params: {num_ops: 2, magnitude: 7}}
+    - {name: ToTensor}
+    - {name: Normalize}
+    - {name: RandomErasing, params: {p: 0.15, scale: [0.02, 0.25], ratio: [0.3, 3.3]}}
+    test_transforms:
+    - {name: ToTensor}
+    - {name: Normalize}
+    group_size: 25000
+
+Substitute:
+  Model: VGG16
+
+# Attacker's query pool: group B only, disjoint from the victim's group A.
+# train_transforms here = the SURROGATE's own augmentation recipe. The query
+# runs on clean=True (test_transforms), so the stolen soft labels are identical
+# regardless of which augmentation the surrogate trains under.
+Auxiliary_Dataset:
+  name: CIFAR-100
+  normalization: cifar100
+  img_size: 32
+  train_transforms:
+    - {name: RandomCrop, params: {size: 32, padding: 4}}
+    - {name: RandomHorizontalFlip, params: {p: 0.5}}
+    - {name: ToTensor}
+    - {name: Normalize}
+  test_transforms:
+    - {name: ToTensor}
+    - {name: Normalize}
+  group_size: 25000
+
+Knockoff:
+  sampling_size: 1.0
+
+# Surrogate recipe = how this CNN is normally trained (SGD + cosine, 160 ep),
+# matching the vanilla victims and all existing CIFAR-10 knockoff plans.
+Optimizer:
+  name: SGD
+  params:
+    lr: 0.1
+    momentum: 0.9
+    weight_decay: 0.0005
+    nesterov: True
+
+Scheduler:
+  name: CosineAnnealingLR
+  params:
+    T_max: 160
+    eta_min: 0.000001
+
+Epochs: 160
+BatchSize: 128

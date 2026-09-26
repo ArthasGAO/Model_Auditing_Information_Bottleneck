@@ -1,0 +1,94 @@
+# ======================================================
+# Experiment Configuration: CIFAR-10 + ResNet-18 (SGD + Cosine LR) + Pruning + Restoring FT
+# FT set is out-of-distribution: the 500K pseudo-labeled TI pool.
+# ======================================================
+Model_Name: CIFAR-10_ResNet-18_25000 # this is used to load the trained model
+Scenario_Name: CIFAR-10_ResNet-18_25000_PseudoLabel_25000
+
+Dataset:
+  name: CIFAR-10
+  normalization: cifar10
+  img_size: 32
+  train_transforms:
+    - {name: RandomCrop, params: {size: 32, padding: 4}}
+    - {name: RandomHorizontalFlip, params: {p: 0.5}}
+    - {name: ToTensor}
+    - {name: Normalize}
+  test_transforms:
+    - {name: ToTensor}
+    - {name: Normalize}
+  group_size: 25000 #this represents the data size used for training
+
+FT_Dataset:
+  name: PseudoLabelCIFAR-10
+  normalization: cifar10
+  img_size: 32
+  train_transforms:
+    - {name: RandomCrop, params: {size: 32, padding: 4}}
+    - {name: RandomHorizontalFlip, params: {p: 0.5}}
+    - {name: ToTensor}
+    - {name: Normalize}
+  test_transforms:
+    - {name: ToTensor}
+    - {name: Normalize}
+  group_size: 25000 #this represents the data size used for fine_tuning
+  note: different
+  # CAUTION: on this branch determine_ft_dataset builds ft_data_val from a held-out
+  # slice of the SAME pseudo-labeled TI pool, not from the CIFAR-10 test set.
+  # So Test_Acc below is agreement with pseudo-labels on TI images (~95-96%), NOT
+  # CIFAR-10 test accuracy (victim = 92.99) -- and best_epoch.pth is selected on it.
+  # Do not put this column in the same table as the Same-distribution plan's.
+
+Model: ResNet-18
+
+# ------------------------------------------------------------------
+# Per-sparsity configs.
+#
+# Sparsity levels: 0.2 and 0.8 only (time-boxed to two rates).
+#   Measured pre-FT accuracy at ftsize=10000 (pseudo-label metric):
+#     0.2 -> 95.35   0.4 -> 95.34   0.6 -> 95.14   0.8 -> 84.87
+#   (same picture on the Same-distribution runs vs victim 92.99:
+#     0.2 -> 92.96   0.4 -> 92.91   0.6 -> 92.77   0.8 -> 82.28)
+#   0.2/0.4/0.6 sit inside seed noise; 0.8 is the only level that actually
+#   perturbs the model (-10.7 pts), so keep the span rather than two near-copies.
+#
+# Optimizer: matched EXACTLY to the FT-AL arm of CIFAR10_RES18_FT_Pseudo_25000.yaml
+# (SGD 1e-3 / mom 0.9 / wd 5e-4 / nesterov / 25 ep; that arm ran 95.45 -> 96.69).
+# Previously this plan ran lr 5e-3 -- 5x the FT baseline on the identical dataset,
+# architecture and FT set -- which confounds the pruning effect with a much more
+# aggressive fine-tune. Aligned, the only variable vs the FT experiment is pruning.
+#
+# Epochs equalized at 25 across both sparsities. Previously 10 ep @ 0.2 vs 20 ep
+# @ 0.6, which puts an epoch effect inside any MI difference between the two rates.
+# The old unequal budget also bought nothing: the LR-matched 10-vs-20-epoch ablation
+# (Same_10000, lr 5e-3) gave 92.74 @10ep vs 92.59 @20ep at s=0.8. 25 here follows
+# the FT baseline, and is needed because lr is now 5x lower than before.
+# ------------------------------------------------------------------
+Optimizers:
+  - name: SGD
+    sparsity: 0.2
+    params:
+      lr: 0.001
+      momentum: 0.9
+      weight_decay: 0.0005
+      nesterov: true
+    Epochs: 25
+
+  - name: SGD
+    sparsity: 0.8
+    params:
+      lr: 0.001
+      momentum: 0.9
+      weight_decay: 0.0005
+      nesterov: true
+    Epochs: 25
+
+Scheduler:
+  name: CosineAnnealingLR
+  params:
+    T_max: auto # <-- dynamic: same as the epochs set for this strategy
+    eta_min: 0.000001
+
+# NOTE: not read by main_prune.py -- both DataLoaders hardcode batch_size=128.
+# Kept for documentation only; the value agrees with what the code actually uses.
+BatchSize: 128

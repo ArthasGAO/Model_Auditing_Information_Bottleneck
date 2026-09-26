@@ -1,0 +1,63 @@
+# ======================================================
+# Experiment Configuration: Knockoff Model Extraction Attack
+# Victim: CIFAR-10 + ResNet-18 (pre-trained)
+# Substitute: ResNet-18 (trained on victim's soft labels)
+# Auxiliary Dataset: CIFAR-10 test set (same distribution)
+# ======================================================
+
+Scenario_Name: CIFAR-10_ResNet-18_25000_JBA_Same10_Same18
+
+# Victim model configuration (used to load the pre-trained victim)
+Victim:
+  Model_Name: CIFAR-10_ResNet-18_25000  # folder name under saved_models/vanilla/
+  Model: ResNet-18
+  Dataset:
+    name: CIFAR-10
+    normalization: cifar10
+    img_size: 32
+    train_transforms:
+      - {name: RandomCrop, params: {size: 32, padding: 4}}
+      - {name: RandomHorizontalFlip, params: {p: 0.5}}
+      - {name: ToTensor}
+      - {name: Normalize}
+    test_transforms:
+      - {name: ToTensor}
+      - {name: Normalize}
+    group_size: 25000
+
+# Substitute model configuration
+Substitute:
+  Model: ResNet-18
+
+# Auxiliary dataset used for querying the victim
+# Can be same-distribution or OOD
+Auxiliary_Dataset:
+  name: CIFAR-10              # seed pool; for cross-domain JBA, change here
+  normalization: cifar10
+  img_size: 32
+  train_transforms:
+    - {name: RandomCrop, params: {size: 32, padding: 4}}
+    - {name: RandomHorizontalFlip, params: {p: 0.5}}
+    - {name: ToTensor}
+    - {name: Normalize}
+  test_transforms:
+    - {name: ToTensor}
+    - {name: Normalize}
+  group_size: 25000
+
+# JBA-specific parameters (from Papernot 2017)
+JBA:
+  num_seeds: 1000              # initial seed set size (paper default for CIFAR-10)
+  extract_rounds: 6           # rho; total queries = num_seeds * 2^(rho-1) = 4800
+  scale_const: 0.1            # lambda; sign flips every tau rounds
+  tau: 2                      # periodic step schedule
+  epochs_per_round: 10        # substitute training epochs per round
+  batch_size: 128
+  # Clip range in normalized space. For CIFAR-10 with cifar10 normalization,
+  # valid pixel values span roughly [-2.5, 2.5]. Clipping prevents drift over rounds.
+  clip_range: [-2.5, 2.5]
+
+Optimizer:
+  name: Adam
+  params:
+    lr: 0.001

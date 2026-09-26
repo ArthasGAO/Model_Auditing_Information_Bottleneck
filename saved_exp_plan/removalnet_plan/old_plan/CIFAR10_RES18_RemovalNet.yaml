@@ -1,0 +1,56 @@
+# ======================================================
+# RemovalNet fingerprint-removal attack on a CIFAR-10 / ResNet-18 victim.
+# Mirrors the FT-plan YAML shape (reuses process_experiment_ft_setup +
+# determine_ft_dataset for the attacker data pipeline). The `RemovalNet:` block
+# carries the author's CIFAR-10 hyperparameters.
+# ======================================================
+Model_Name: CIFAR-10_ResNet-18_25000      # victim folder prefix under saved_models/vanilla/CNN_Models/
+Scenario_Name: CIFAR-10_ResNet-18_25000_RemovalNet
+
+Dataset:                                    # victim's training-data definition (group_A)
+  name: CIFAR-10
+  normalization: cifar10
+  img_size: 32
+  train_transforms:
+    - {name: RandomCrop, params: {size: 32, padding: 4}}
+    - {name: RandomHorizontalFlip, params: {p: 0.5}}
+    - {name: ToTensor}
+    - {name: Normalize}
+  test_transforms:
+    - {name: ToTensor}
+    - {name: Normalize}
+  group_size: 25000                         # must match how the victim was trained
+
+FT_Dataset:                                 # attacker's surrogate data (disjoint group_B, overlap 0)
+  name: CIFAR-10
+  normalization: cifar10
+  img_size: 32
+  train_transforms:
+    - {name: RandomCrop, params: {size: 32, padding: 4}}
+    - {name: RandomHorizontalFlip, params: {p: 0.5}}
+    - {name: ToTensor}
+    - {name: Normalize}
+  test_transforms:
+    - {name: ToTensor}
+    - {name: Normalize}
+  group_size: 10000                        # attacker query-set size (<= 50000 - group_size)
+
+Model: ResNet-18
+
+# ---- RemovalNet attack hyperparameters (author's CIFAR-10 settings) ----
+RemovalNet:
+  layer: 2            # author ResNet index: 2->layer1, 3->layer2, 4->layer3, 5->layer4
+  ydist: l2
+  alpha: 0.2          # weight on logit-level KL removal loss
+  beta: 2.0           # weight on latent-level MSE removal loss
+  gamma: 0.6          # weight on accuracy-preserving CE loss
+  T: 20               # KD temperature
+  poison_steps: 20    # inner feature-ascent steps
+  shuffle_ratio: 0.02 # channel-shuffle ratio
+  lr: 0.008           # outer SGD lr (deterministic; no random jitter)
+  momentum: 0.9
+  weight_decay: 0.0001
+  iterations: 500   # mini-batch optimizer steps (~2.5 CIFAR epochs)
+  test_interval: 20   # eval + CSV-log cadence (steps)
+  save_interval: 100  # checkpoint cadence (steps)
+  batch_size: 128

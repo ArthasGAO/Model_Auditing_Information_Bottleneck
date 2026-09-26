@@ -1,0 +1,96 @@
+# ======================================================
+# Knockoff model extraction -- CIFAR-100, Same100 3x3 matrix
+# Victim:     VGG16 (VGG16, SGD/cosine/400ep, saved_models/vanilla/CNN_Models/)
+# Substitute: DeiT -- AdamW 7e-4 / warmup(15)+cosine / 260 ep (CIFAR-100 DeiT's own recipe)
+# Auxiliary:  CIFAR-100 group_B (same distribution as the victim, disjoint
+#             from its group_A), 25000 samples, sampling_size 1.0
+# Run with:   main_knockoff_extraction_deit.py
+# ======================================================
+
+Scenario_Name: CIFAR-100_VGG16_25000_Knockoff_Same100_CrossDeiT
+
+Victim:
+  Model_Name: CIFAR-100_VGG16_25000   # folder under saved_models/vanilla/CNN_Models/
+  Model: VGG16
+  Dataset:
+    name: CIFAR-100
+    normalization: cifar100
+    img_size: 32
+    # Documents how the victim was trained; the attack only ever reads this
+    # dataset's test_set / in_sample_set, both of which are clean.
+    train_transforms:
+    - {name: RandomCrop, params: {size: 32, padding: 4}}
+    - {name: RandomHorizontalFlip, params: {p: 0.5}}
+    - {name: ToTensor}
+    - {name: Normalize}
+    test_transforms:
+    - {name: ToTensor}
+    - {name: Normalize}
+    group_size: 25000
+
+Substitute:
+  Model:
+    model_name: deit_tiny_distilled_patch16_224   # DISTILLED, see note below
+    img_size: 32
+    patch_size: 4
+    pretrained: False        # trained from scratch on the stolen soft labels
+    drop_path_rate: 0.15
+#
+# NOTE -- why the DeiT surrogate is DISTILLED here, unlike the CIFAR-10 matrix:
+# detection compares a suspect against a negative pool, and the CIFAR-100 DeiT
+# pool is 50 x CIFAR-100_DeiT_Distill_25000 (rate 0.0). MI coordinates are read
+# off the logits, and a distilled model's logits are (head(cls) + head_dist(dist))/2
+# -- a different function class from a plain model's head(cls). A plain-DeiT
+# suspect tested against a distilled H0 pool would mix an architecture effect
+# into the ownership signal, so the suspect has to match the pool.
+# This is applied to ALL THREE DeiT-surrogate cells, not just the diagonal, so
+# the surrogate axis stays identical down the column and the column keeps
+# isolating "victim architecture".
+# The attacker side is sound: under the knockoff KL objective both heads receive
+# gradient through the averaged output (verified: equal grad norms on head and
+# head_dist), so no teacher is needed -- the surrogate simply has a classifier
+# that is the mean of two linear heads on two tokens.
+
+# Attacker's query pool: group_B only, disjoint from the victim's group_A.
+# train_transforms here are the SURROGATE's training augmentation; the query
+# itself uses test_transforms, so the stolen soft labels are identical across
+# all nine cells of the matrix.
+Auxiliary_Dataset:
+  name: CIFAR-100
+  normalization: cifar100
+  img_size: 32
+  train_transforms:
+    - {name: RandomResizedCrop, params: {size: 32, scale: [0.85, 1.0], ratio: [0.9, 1.1]}}
+    - {name: RandomHorizontalFlip, params: {p: 0.5}}
+    - {name: RandAugment, params: {num_ops: 2, magnitude: 9}}
+    - {name: ToTensor}
+    - {name: Normalize}
+    - {name: RandomErasing, params: {p: 0.20, scale: [0.02, 0.20], ratio: [0.3, 3.3]}}
+  test_transforms:
+    - {name: ToTensor}
+    - {name: Normalize}
+  group_size: 25000
+
+Knockoff:
+  sampling_size: 1.0
+
+# Surrogate recipe = how this architecture is normally trained on CIFAR-100.
+Optimizer:
+  name: AdamW
+  params:
+    lr: 0.0007
+    betas: [0.9, 0.999]
+    eps: 1.0e-8
+    weight_decay: 0.05
+    amsgrad: False
+
+Scheduler:
+  name: WarmupCosineAnnealingLR
+  params:
+    warmup_epochs: 15
+    warmup_start_factor: 0.1
+    T_max: 260
+    eta_min: 0.000001
+
+Epochs: 260
+BatchSize: 128

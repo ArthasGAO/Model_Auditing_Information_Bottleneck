@@ -1,0 +1,70 @@
+# ======================================================
+# KD positive models - Cell A / Cell C, same-architecture student
+#   Teacher: ResNet-18 (victim, group_A, 25000)
+#   Student: ResNet-18   -> matches the `Same18` Knockoff positive and the
+#                           ResNet-18 negative pool in vanilla/CNN_Models
+# Identical architectures, so FitNet's hint stage aligns and all three
+# methods run. Overlap rate (Cell A = 1.0 / Cell C = 0.0) is swept by
+# main_kd.py, not set here.
+# ======================================================
+Scenario_Name: CIFAR-10_ResNet-18to18_25000
+
+Dataset:
+  name: CIFAR-10
+  normalization: cifar10
+  img_size: 32
+  train_transforms:
+    - {name: RandomCrop, params: {size: 32, padding: 4}}
+    - {name: RandomHorizontalFlip, params: {p: 0.5}}
+    - {name: ToTensor}
+    - {name: Normalize}
+  test_transforms:
+    - {name: ToTensor}
+    - {name: Normalize}
+  group_size: 25000
+
+Teacher_Model:
+  teacher_name: ResNet-18
+  teacher_ckpt: "./saved_models/vanilla/CNN_Models/CIFAR-10_ResNet-18_25000_42_1.0/best_epoch.pth"
+
+Student_Model:
+  student_name: ResNet-18
+
+Optimizer:
+  name: SGD
+  params:
+    lr: 0.1
+    momentum: 0.9
+    nesterov: true
+    weight_decay: 0.0005
+
+Distillation:
+  - name: KD
+    params:
+      TEMPERATURE: 4
+      CE_WEIGHT: 0.1
+      KD_WEIGHT: 0.9
+
+  - name: DKD
+    params:
+      CE_WEIGHT: 1.0
+      ALPHA: 1.0
+      BETA: 8.0
+      T: 4.0
+      WARMUP: 20
+
+  - name: FitNet
+    params:
+      HINT_LAYER: 2
+      INPUT_SIZE: 32
+      CE_WEIGHT: 1.0
+      FEAT_WEIGHT: 100.0
+
+Scheduler:
+  name: CosineAnnealingLR
+  params:
+    T_max: auto
+    eta_min: 0.000001
+
+Epochs: 200
+BatchSize: 128

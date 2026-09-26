@@ -1,0 +1,3 @@
+# Post-hoc AT source: Knockoff extraction, CIFAR-10 group_B queries, ResNet-18 substitute (seed 0)
+#   model: extraction_final/CIFAR-10_ResNet-18_25000_Knockoff_Same10_Same18_0_1.0
+Scenario_Name: CIFAR-10_ResNet-18_25000_Knockoff_Same10_Same18

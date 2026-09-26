@@ -1,0 +1,62 @@
+# ======================================================
+# Experiment Configuration: CIFAR-10 + VGG16 (SGD + Cosine LR) + fine-tuning (in a pseudo-labels ImageNet subset)
+# ======================================================
+Model_Name: CIFAR-10_VGG16_40000 # this is used to load the trained model
+Scenario_Name: CIFAR-10_VGG16_40000_Same_10000
+
+Dataset:
+  name: CIFAR-10
+  normalization: cifar10
+  img_size: 32
+  train_transforms:
+    - {name: RandomCrop, params: {size: 32, padding: 4}}
+    - {name: RandomHorizontalFlip, params: {p: 0.5}}
+    - {name: ToTensor}
+    - {name: Normalize}
+  test_transforms:
+    - {name: ToTensor}
+    - {name: Normalize}
+  group_size: 40000 #this represents the data size used for training
+
+FT_Dataset:
+  name: CIFAR-10
+  normalization: cifar10
+  img_size: 32
+  train_transforms:
+    - {name: RandomCrop, params: {size: 32, padding: 4}}
+    - {name: RandomHorizontalFlip, params: {p: 0.5}}
+    - {name: ToTensor}
+    - {name: Normalize}
+  test_transforms:
+    - {name: ToTensor}
+    - {name: Normalize}
+  group_size: 10000 #this represents the data size used for fine_tuning
+  note: same
+
+Model: VGG16
+
+Optimizers:
+  - name: SGD
+    strategy: FT-LL
+    params:
+      lr: 0.01
+      momentum: 0.9
+      weight_decay: 0.0005
+    Epochs: 15
+
+  - name: SGD
+    strategy: FT-AL
+    params:
+      lr: 0.0005          # ↓ safer for VGG full FT
+      momentum: 0.9
+      weight_decay: 0.001 # optional ↑ regularization for small pseudo-label set
+    Epochs: 25
+
+
+Scheduler:
+  name: CosineAnnealingLR
+  params:
+    T_max: auto # <-- dynamic: same as the epochs set for this strategy
+    eta_min: 0.00001
+
+BatchSize: 128

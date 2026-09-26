@@ -1,0 +1,44 @@
+# ======================================================
+# Defense evaluation of RemovalNet-attacked models (CIFAR-10 / ResNet-18).
+# Usable by BOTH main_DEEPJUDGE_eval.py and main_IPGUARD_eval.py
+# (DeepJudge uses the Attack block; IPGuard ignores it).
+#
+# Victim = the same model the attack targeted: CIFAR-10_ResNet-18_25000_42_1.0
+# (load_victim_model hard-codes seed=42, overlap=1.0).
+#
+# Suspects (Positive) = the RemovalNet outputs. State: last -> load_last_checkpoint
+# globs *.pth and takes the newest by mtime, i.e. the FINAL removed model
+# (step_1001.pth / step_501.pth). No checkpoint renaming needed.
+# ======================================================
+Scenario_Name: CIFAR-10_ResNet-18_25000_42_1.0_RemovalNet
+
+Victim:
+  Model_Name: CIFAR-10_ResNet-18_25000
+  Model: ResNet-18
+  Dataset:
+    name: CIFAR-10
+    normalization: cifar10
+    img_size: 32
+    train_transforms:
+      - {name: RandomCrop, params: {size: 32, padding: 4}}
+      - {name: RandomHorizontalFlip, params: {p: 0.5}}
+      - {name: ToTensor}
+      - {name: Normalize}
+    test_transforms:
+      - {name: ToTensor}
+      - {name: Normalize}
+    group_size: 25000
+
+Positive:
+  Model: ResNet-18
+  State: last        # newest *.pth = final removed model (works with step_N.pth)
+  Model_Path:
+    - /removalnet_vanilla/CIFAR-10_ResNet-18_25000_RemovalNet_42_1.0_l2_iters1000_aseed=0
+    - /removalnet_vanilla/CIFAR-10_ResNet-18_25000_RemovalNet_42_1.0_l2_iters500_aseed=0
+    - /removalnet_vanilla/CIFAR-10_ResNet-18_25000_RemovalNet_42_1.0_logitonly_iters500_aseed=0
+
+Attack:                 # used by DeepJudge only; matches the cached victim adv examples
+  name: PGD
+  eps: 0.03
+  steps: 10
+  step_size: 0.003

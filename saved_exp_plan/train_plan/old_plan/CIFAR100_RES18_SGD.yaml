@@ -1,0 +1,34 @@
+Scenario_Name: CIFAR-100_ResNet-18_40000
+
+Dataset:
+  name: CIFAR-100
+  normalization: cifar100
+  img_size: 32
+  group_size: 40000
+  train_transforms:
+    - {name: RandomCrop, params: {size: 32, padding: 4}}
+    - {name: RandomHorizontalFlip, params: {p: 0.5}}
+    - {name: ToTensor}
+    - {name: Normalize}
+  test_transforms:
+    - {name: ToTensor}
+    - {name: Normalize}
+
+Model: ResNet-18
+
+Optimizer:   
+  name: SGD
+  params:
+    lr: 0.1
+    momentum: 0.9
+    nesterov: true
+    weight_decay: 0.0005
+
+Scheduler:
+  name: CosineAnnealingLR
+  params:
+    T_max: 200       # assumes scheduler.step() is called once per epoch
+    eta_min: 0.000001
+
+Epochs: 200
+BatchSize: 128

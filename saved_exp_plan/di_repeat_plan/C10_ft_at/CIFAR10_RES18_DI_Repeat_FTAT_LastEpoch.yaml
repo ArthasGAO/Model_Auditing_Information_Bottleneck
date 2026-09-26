@@ -1,0 +1,42 @@
+# Repeated DI (main_DI_repeat.py / main_DI_repeat_paper.py) -- suite C10_ft_at.
+# Victim: CIFAR-10_ResNet-18_25000 (seed 42, group_A 25000). Suspects: the one-stage AT FT-AL models in
+# saved_models/ft_at (training plan saved_exp_plan/ft_at_plan/CIFAR10_RES18_FT_Same_25000_ATPGD8.yaml:
+# L = CE(x) + 1 * CE(x_adv), PGD-10, BN frozen, run v1), ftseed 0..2 x eps 2/255, 4/255, 8/255.
+# Checkpoint: LAST epoch, epoch_24.pth (FT-AL trains 25 epochs, 0..24); named explicitly
+# because State: last picks the newest file by mtime. Alternatives kept in every folder:
+#   best_epoch.pth      highest clean test acc after 30% of the epochs (main_ft_at's primary pick)
+#   best_rob_epoch.pth  highest robust acc
+# To score one of those instead, change Checkpoint below (and use a new --out-dir).
+# Checkpoints are plain ResNet-18 state dicts, fed raw [0,1] images through NormalizedModel.
+Scenario_Name: CIFAR-10_ResNet-18_25000_DI_Repeat_FTAT_LastEpoch
+Victim:
+  Model_Name: CIFAR-10_ResNet-18_25000
+  Model: ResNet-18
+  Seed: 42
+  Overlap: 1.0
+  Dataset:
+    name: CIFAR-10
+    normalization: cifar10
+    img_size: 32
+    group_size: 25000
+    download: false
+DI:
+  N_Train_Samples: 1000
+  N_Test_Samples:
+  - 1000
+  Alpha: 0.05
+Positive:
+- Model: ResNet-18
+  State: last
+  Checkpoint: epoch_24.pth
+  Require_Checkpoints: true
+  Model_Path:
+  - ft_at/CIFAR-10_ResNet-18_25000_Same_25000_42_1.0_FT-AL_ftsize=25000_ftseed=0_ATPGD_eps=0.007843_steps=10_lambda=1_bn=frozen_run=v1
+  - ft_at/CIFAR-10_ResNet-18_25000_Same_25000_42_1.0_FT-AL_ftsize=25000_ftseed=0_ATPGD_eps=0.015686_steps=10_lambda=1_bn=frozen_run=v1
+  - ft_at/CIFAR-10_ResNet-18_25000_Same_25000_42_1.0_FT-AL_ftsize=25000_ftseed=0_ATPGD_eps=0.031373_steps=10_lambda=1_bn=frozen_run=v1
+  - ft_at/CIFAR-10_ResNet-18_25000_Same_25000_42_1.0_FT-AL_ftsize=25000_ftseed=1_ATPGD_eps=0.007843_steps=10_lambda=1_bn=frozen_run=v1
+  - ft_at/CIFAR-10_ResNet-18_25000_Same_25000_42_1.0_FT-AL_ftsize=25000_ftseed=1_ATPGD_eps=0.015686_steps=10_lambda=1_bn=frozen_run=v1
+  - ft_at/CIFAR-10_ResNet-18_25000_Same_25000_42_1.0_FT-AL_ftsize=25000_ftseed=1_ATPGD_eps=0.031373_steps=10_lambda=1_bn=frozen_run=v1
+  - ft_at/CIFAR-10_ResNet-18_25000_Same_25000_42_1.0_FT-AL_ftsize=25000_ftseed=2_ATPGD_eps=0.007843_steps=10_lambda=1_bn=frozen_run=v1
+  - ft_at/CIFAR-10_ResNet-18_25000_Same_25000_42_1.0_FT-AL_ftsize=25000_ftseed=2_ATPGD_eps=0.015686_steps=10_lambda=1_bn=frozen_run=v1
+  - ft_at/CIFAR-10_ResNet-18_25000_Same_25000_42_1.0_FT-AL_ftsize=25000_ftseed=2_ATPGD_eps=0.031373_steps=10_lambda=1_bn=frozen_run=v1

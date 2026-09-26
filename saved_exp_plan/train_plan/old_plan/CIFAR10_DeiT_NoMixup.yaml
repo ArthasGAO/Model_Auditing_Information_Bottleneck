@@ -1,0 +1,59 @@
+Scenario_Name: CIFAR-10_DeiT_40000_NoMixup_Hard
+
+Dataset:
+  name: CIFAR-10
+  normalization: cifar10
+  img_size: 32
+  train_transforms:
+    - {name: RandomResizedCrop, params: {size: 32, scale: [0.85, 1.0], ratio: [0.9, 1.1]}}
+    - {name: RandomHorizontalFlip, params: {p: 0.5}}
+    - {name: RandAugment, params: {num_ops: 2, magnitude: 7}}
+    - {name: ToTensor}
+    - {name: Normalize}
+    - {name: RandomErasing, params: {p: 0.15, scale: [0.02, 0.25], ratio: [0.3, 3.3]}}
+  test_transforms:
+    - {name: ToTensor}
+    - {name: Normalize}
+  group_size: 40000
+
+Model:
+  model_name: deit_tiny_distilled_patch16_224
+  img_size: 32
+  patch_size: 4
+  pretrained: False
+  drop_path_rate: 0.05
+
+Augmentation:   # batch-level (outside dataset)
+  use_mixup: False
+  mixup_alpha: 0.4
+  cutmix_alpha: 0.7
+  prob: 0.8
+  switch_prob: 0.5
+  label_smoothing: 0.05
+
+Distillation:
+  enabled: True
+  type: hard          # soft is usually more stable with mixup/cutmix
+  alpha: 0.5
+  tau: 2.0
+  teacher_name: ResNet-18
+  teacher_ckpt: "./saved_models/vanilla/CIFAR-10_ResNet-18_40000_42_1.0/best_epoch.pth"
+
+Optimizer:
+  name: AdamW
+  params:
+    lr: 0.0007
+    betas: [0.9, 0.999]
+    eps: 1.0e-8
+    weight_decay: 0.03
+    amsgrad: False
+
+Scheduler:
+  name: WarmupCosineAnnealingLR
+  params:
+    warmup_epochs: 10
+    warmup_start_factor: 0.1
+    T_max: 200
+    eta_min: 0.000001
+
+Epochs: 200

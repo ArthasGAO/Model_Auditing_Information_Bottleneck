@@ -1,0 +1,65 @@
+# CIFAR-100 knockoff extraction positives, victim = CIFAR-100 ResNet-18
+# (seed 42, group_A 25000), under the CLEAN DI protocol of the self-implemented
+# path (main_DI_eval.py). Same protocol as CIFAR10_RES18_DI_Extraction.yaml:
+# no DI.Regressor_Path, so the regressor is trained once on the victim with
+# un-augmented private (raw_train_clean_set, group_A subset) and public
+# (raw_test_set) images and cached as
+#   saved_models/di_regressor/victim=ResNet-18_CIFAR-100_25000_seed=42_overlap=1.0_n=1000_clean.pt
+# Suspects are the 9 models in saved_models/extraction_final whose victim is
+# CIFAR-100 RN18 (Knockoff, Same100 = CIFAR-100 group_B query pool):
+#   Same18 (RN18 clone), Cross16 (VGG16 clone), CrossDeiT (DeiT clone) x seeds 0..2.
+# The DeiT clones are deit_tiny_distilled_patch16_224 (img 32, patch 4), see
+# saved_exp_plan/knockoff_3x3_c100_same100_deit/CIFAR100_RES18_KNOCKOFF_Same100_CrossDeiT.yaml,
+# so their block carries Model_Config; without it the plain-DeiT builder is used
+# and the checkpoint does not load (dist_token / head_dist / pos_embed 66 vs 65).
+# Results go to a CIFAR-100-only master table, not the CIFAR-10 master_DI.csv.
+#
+# Run (from E:\Experiment):
+#   python main_DI_eval.py --yaml saved_exp_plan/di_eval_plan/CIFAR100_RES18_DI_Extraction.yaml
+Scenario_Name: CIFAR-100_ResNet-18_25000_DI_Extraction
+Victim:
+  Model_Name: CIFAR-100_ResNet-18_25000
+  Model: ResNet-18
+  Seed: 42
+  Overlap: 1.0
+  Dataset:
+    name: CIFAR-100
+    normalization: cifar100
+    img_size: 32
+    group_size: 25000
+    download: false
+DI:
+  N_Train_Samples: 1000
+  N_Test_Samples:
+  - 1000
+  Alpha: 0.05
+  Master_CSV: saved_logs/at_eval/DI/master_DI_C100_Extraction.csv
+Positive:
+- Model: ResNet-18
+  State: best
+  Checkpoint: best_epoch.pth
+  Require_Checkpoints: true
+  Model_Path:
+  - extraction_final/CIFAR-100_ResNet-18_25000_Knockoff_Same100_Same18_0_1.0
+  - extraction_final/CIFAR-100_ResNet-18_25000_Knockoff_Same100_Same18_1_1.0
+  - extraction_final/CIFAR-100_ResNet-18_25000_Knockoff_Same100_Same18_2_1.0
+- Model: VGG16
+  State: best
+  Checkpoint: best_epoch.pth
+  Require_Checkpoints: true
+  Model_Path:
+  - extraction_final/CIFAR-100_ResNet-18_25000_Knockoff_Same100_Cross16_0_1.0
+  - extraction_final/CIFAR-100_ResNet-18_25000_Knockoff_Same100_Cross16_1_1.0
+  - extraction_final/CIFAR-100_ResNet-18_25000_Knockoff_Same100_Cross16_2_1.0
+- Model: DeiT
+  State: best
+  Checkpoint: best_epoch.pth
+  Require_Checkpoints: true
+  Model_Config:
+    model_name: deit_tiny_distilled_patch16_224
+    img_size: 32
+    patch_size: 4
+  Model_Path:
+  - extraction_final/CIFAR-100_ResNet-18_25000_Knockoff_Same100_CrossDeiT_0_1.0
+  - extraction_final/CIFAR-100_ResNet-18_25000_Knockoff_Same100_CrossDeiT_1_1.0
+  - extraction_final/CIFAR-100_ResNet-18_25000_Knockoff_Same100_CrossDeiT_2_1.0

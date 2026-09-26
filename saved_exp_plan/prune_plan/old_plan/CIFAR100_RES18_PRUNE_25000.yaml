@@ -1,0 +1,80 @@
+# ======================================================
+# Experiment Configuration: CIFAR-100 + ResNet-18 + Pruning + Restoring FT (Same distribution)
+# ======================================================
+Model_Name: CIFAR-100_ResNet-18_25000
+Scenario_Name: CIFAR-100_ResNet-18_25000_Same_25000
+
+Dataset:
+  name: CIFAR-100
+  normalization: cifar100
+  img_size: 32
+  train_transforms:
+    - {name: RandomCrop, params: {size: 32, padding: 4}}
+    - {name: RandomHorizontalFlip, params: {p: 0.5}}
+    - {name: ToTensor}
+    - {name: Normalize}
+  test_transforms:
+    - {name: ToTensor}
+    - {name: Normalize}
+  group_size: 25000
+
+FT_Dataset:
+  name: CIFAR-100
+  normalization: cifar100
+  img_size: 32
+  train_transforms:
+    - {name: RandomCrop, params: {size: 32, padding: 4}}
+    - {name: RandomHorizontalFlip, params: {p: 0.5}}
+    - {name: ToTensor}
+    - {name: Normalize}
+  test_transforms:
+    - {name: ToTensor}
+    - {name: Normalize}
+  group_size: 25000
+  note: same
+
+Model: ResNet-18
+
+# Per-sparsity configs.
+# LR held constant at 0.001 (10x lower than CIFAR-10 prune to protect fragile CIFAR-100 features).
+# Epochs scale with sparsity, longer than CIFAR-10 versions due to harder recovery.
+Optimizers:
+  - name: SGD
+    sparsity: 0.2
+    params:
+      lr: 0.001
+      momentum: 0.9
+      weight_decay: 0.0002
+    Epochs: 30
+
+  - name: SGD
+    sparsity: 0.4
+    params:
+      lr: 0.001
+      momentum: 0.9
+      weight_decay: 0.0002
+    Epochs: 50
+
+  - name: SGD
+    sparsity: 0.6
+    params:
+      lr: 0.001
+      momentum: 0.9
+      weight_decay: 0.0002
+    Epochs: 80
+
+  - name: SGD
+    sparsity: 0.8
+    params:
+      lr: 0.001
+      momentum: 0.9
+      weight_decay: 0.0002
+    Epochs: 120
+
+Scheduler:
+  name: CosineAnnealingLR
+  params:
+    T_max: auto
+    eta_min: 0.000001
+
+BatchSize: 128

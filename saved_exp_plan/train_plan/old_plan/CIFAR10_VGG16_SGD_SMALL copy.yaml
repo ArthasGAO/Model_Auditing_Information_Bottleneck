@@ -1,0 +1,33 @@
+# ======================================================
+# Experiment Configuration: CIFAR-10 + VGG16 (SGD + Cosine LR)
+# ======================================================
+
+Scenario_Name: CIFAR-10_VGG16_25000_temp
+
+Dataset:
+  name: CIFAR-10
+  normalization: cifar10
+  img_size: 32
+  train_transforms:
+    - {name: RandomCrop, params: {size: 32, padding: 4}}
+    - {name: RandomHorizontalFlip, params: {p: 0.5}}
+    - {name: ToTensor}
+    - {name: Normalize}
+  test_transforms:
+    - {name: ToTensor}
+    - {name: Normalize}
+  group_size: 25000
+
+Model: VGG16
+
+Optimizer:
+  name: SGD
+  params:
+    lr: 0.01 # 0.05
+    momentum: 0.9
+    weight_decay: 0.0005
+    nesterov: True
+
+Epochs: 100 #160
+BatchSize: 128
+

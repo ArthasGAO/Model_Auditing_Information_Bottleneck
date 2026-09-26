@@ -1,0 +1,97 @@
+# ======================================================
+# CIFAR-100 + DeiT-Tiny, 25000 samples, hard distillation, seed-paired teachers.
+# The production plan for the 50-model negative pool.
+#
+# Budget is 260, not 400. Measured on seed 52, same teacher, same everything:
+#   260 ep -> 61.16% final / 61.30% best, 22.4 min
+#   400 ep -> 61.79% final / 61.83% best, 34.4 min
+# Marginal return over the 400-epoch run: +2.93 pt/100ep from ep200-260,
+# +2.90 from 260-320, +1.20 from 320-376, then -0.17 to the finish. The curve
+# turns over at 376, so 400 buys +0.63 pt for 54% more compute -- eight extra
+# hours across 50 models. 260 it is.
+#
+# Against the plain (no-distillation) family this recipe is worth +6.44 points
+# -- fifteen-plus standard deviations of that family's own spread (54.72+-0.42,
+# n=22) -- and it pulls the train/test gap from 44.0 down to 34.6, which lands
+# DeiT inside the CNN band (VGG16 32.1, ResNet-18 27.8) instead of far outside
+# it. Expect the pool to be HARDER to detect than the plain one for exactly
+# that reason: less memorisation is less signal.
+#
+# {seed} in teacher_ckpt is substituted in main_deit_overlap with the student's
+# own seed. Every CIFAR-100_ResNet-18_25000_<seed>_0.0 trained on the identical
+# subset -- create_or_load_group_B takes seed=42 hard-coded, so group_B depends
+# only on (group_size, overlap_rate) -- so pairing costs nothing in data terms
+# and stops all 50 negatives from inheriting one shared decision boundary. All
+# 50 teachers verified loadable, seeds 42..91 contiguous, 71.92%-72.99% test.
+#
+# Because teacher_ckpt is pinned to _0.0, this plan covers overlap rate 0.0
+# only. A full 11-rate grid needs the rate templated too, and a teacher trained
+# on each rate's own group_B -- never one trained on more data than the student
+# sees, or the reserve that the negative pool draws from leaks in through the
+# teacher's logits.
+#
+# mixup/cutmix stays OFF here on purpose: strong augmentation is the ablation
+# variable for "does training-set-as-probing-set survive a well-regularised
+# victim", and the pool has to sit at the control end of that axis.
+# ======================================================
+
+Scenario_Name: CIFAR-100_DeiT_Distill_25000
+
+Dataset:
+  name: CIFAR-100
+  normalization: cifar100
+  img_size: 32
+  train_transforms:
+    - {name: RandomResizedCrop, params: {size: 32, scale: [0.85, 1.0], ratio: [0.9, 1.1]}}
+    - {name: RandomHorizontalFlip, params: {p: 0.5}}
+    - {name: RandAugment, params: {num_ops: 2, magnitude: 9}}
+    - {name: ToTensor}
+    - {name: Normalize}
+    - {name: RandomErasing, params: {p: 0.20, scale: [0.02, 0.20], ratio: [0.3, 3.3]}}
+  test_transforms:
+    - {name: ToTensor}
+    - {name: Normalize}
+  group_size: 25000
+
+Model:
+  model_name: deit_tiny_distilled_patch16_224   # forced by the distillation head
+  img_size: 32
+  patch_size: 4
+  pretrained: False
+  drop_path_rate: 0.15
+
+Augmentation:
+  use_mixup: False                     # HELD OFF -- reserved for the ablation
+  mixup_alpha: 0.4
+  cutmix_alpha: 0.7
+  prob: 0.8
+  switch_prob: 0.5
+  label_smoothing: 0.15
+
+Distillation:
+  enabled: True
+  type: hard                           # tau is unused when hard; only 'soft' reads it
+  alpha: 0.5                           # DeiT's reference hard-distillation weight
+  tau: 2.0
+  teacher_name: ResNet-18
+  teacher_ckpt: "./saved_models/vanilla/CIFAR-100_ResNet-18_25000_{seed}_0.0/best_epoch.pth"
+
+Optimizer:
+  name: AdamW
+  params:
+    lr: 0.0007
+    betas: [0.9, 0.999]
+    eps: 1.0e-8
+    weight_decay: 0.05
+    amsgrad: False
+
+Scheduler:
+  name: WarmupCosineAnnealingLR
+  params:
+    warmup_epochs: 15
+    warmup_start_factor: 0.1
+    T_max: 260
+    eta_min: 0.000001
+
+Epochs: 260
+BatchSize: 128

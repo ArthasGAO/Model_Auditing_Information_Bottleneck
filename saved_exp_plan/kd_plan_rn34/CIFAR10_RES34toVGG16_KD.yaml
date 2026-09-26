@@ -1,0 +1,70 @@
+# ======================================================
+# KD positive models - Cell A / Cell C, bigger cross-family teacher
+#   Teacher: ResNet-34 (victim, group_A, 25000; trained by main_train_teacher.py)
+#   Student: VGG16      -> matches the VGG16 negative pool
+#                          (vanilla/CNN_Models rate 0.0, Negative_Model_Pool_0.0/CNN)
+#
+# Reference row: kd_plan_arch/old_plan/CIFAR10_RES18toVGG16_KD.yaml - identical
+# except for the teacher.
+#
+# FitNet is ABSENT for a structural reason, not by choice: ResNet feats[2] is
+# (128,16,16) while VGG feats[2] is (256,4,4); ConvReg aligns channels only, so
+# the hint MSE cannot be formed. KD / DKD are logit-based and unaffected.
+#
+# Student recipe = the CIFAR-10 VGG16 pool recipe (SGD 0.1, wd 5e-4, cosine),
+# 200 epochs as in the existing 18toVGG16 row (pool itself: 160).
+# ======================================================
+Scenario_Name: CIFAR-10_ResNet-34toVGG16_25000
+
+Dataset:
+  name: CIFAR-10
+  normalization: cifar10
+  img_size: 32
+  train_transforms:
+    - {name: RandomCrop, params: {size: 32, padding: 4}}
+    - {name: RandomHorizontalFlip, params: {p: 0.5}}
+    - {name: ToTensor}
+    - {name: Normalize}
+  test_transforms:
+    - {name: ToTensor}
+    - {name: Normalize}
+  group_size: 25000
+
+Teacher_Model:
+  teacher_name: ResNet-34
+  teacher_ckpt: "./saved_models/vanilla/CIFAR-10_ResNet-34_25000_42_1.0/best_epoch.pth"
+
+Student_Model:
+  student_name: VGG16
+
+Optimizer:
+  name: SGD
+  params:
+    lr: 0.1
+    momentum: 0.9
+    nesterov: true
+    weight_decay: 0.0005
+
+Distillation:
+  - name: KD
+    params:
+      TEMPERATURE: 4
+      CE_WEIGHT: 0.1
+      KD_WEIGHT: 0.9
+
+  - name: DKD
+    params:
+      CE_WEIGHT: 1.0
+      ALPHA: 1.0
+      BETA: 8.0
+      T: 4.0
+      WARMUP: 20
+
+Scheduler:
+  name: CosineAnnealingLR
+  params:
+    T_max: auto
+    eta_min: 0.000001
+
+Epochs: 200
+BatchSize: 128

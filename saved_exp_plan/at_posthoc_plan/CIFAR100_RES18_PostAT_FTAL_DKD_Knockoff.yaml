@@ -1,0 +1,99 @@
+# ======================================================================
+# CIFAR-100 post-hoc (two-stage) adversarial fine-tuning of three derived models,
+# clean-accuracy-preserving recipe. Driver: main_at_posthoc.py
+#
+# Sources (best_epoch.pth; clean test acc / PGD-10 robust acc at 2,4,8/255 on the
+# first 1000 test images, measured 2026-09-23):
+#   FT-AL    ft_final/CIFAR-100_ResNet-18_25000_Same_25000_42_1.0_FT-AL_ftsize=25000_ftseed=0   73.46 / 3.2, 1.0, 0.1
+#   DKD      kd_final/CIFAR-100_ResNet-18to18_25000_DKD_0_0.0 (RN18 victim -> RN18)             75.41 / 6.8, 0.5, 0.2
+#   Knockoff extraction_final/CIFAR-100_ResNet-18_25000_Knockoff_Same100_Same18_0_1.0           71.30 / 8.1, 1.8, 0.0
+#   (victim CIFAR-100_ResNet-18_25000_42_1.0: 72.24 / 7.1, 2.0, 0.4)
+#
+# AT data: the other 25000 CIFAR-100 training images (group_B 0.0, disjoint from the
+# victim's group_A); every source above was already trained on exactly these images.
+# Ground-truth labels, as in main_at.py / at_final.
+#
+# Per batch (B = 128):  L = CE(f(x), y) + lambda * CE(f(x_adv[:k]), y[:k]),  lambda = 1, no rescaling
+#             x_adv = PGD-10 (random start, step 2.5*eps/10) against the model being tuned, built for
+#             k = adv_fraction * B = 32 images of each shuffled batch (clean priority, see below)
+# BN joint: ONE train-mode forward on cat([x (128), x_adv (32)]); shared batch statistics, 20% adversarial.
+# Selection: best_clean_epoch.pth (highest clean test acc from epoch 6 on) is the primary
+# checkpoint; best_rob_epoch.pth and epoch_29.pth are kept.
+#
+# Why joint BN and lr 3e-4 (pilots 2026-09-23, eps 8/255, deployed clean / robust on 1000 imgs):
+#  * The CIFAR-100 sources (wd 1e-3, 360 ep) have tiny pre-BN scale: median BN running_var 4e-5,
+#    76% of channels < 1e-4 (CIFAR-10 victim: 2.3e-4, 26%). With frozen BN the effective step
+#    ~ lr/||w||^2 is ~6x CIFAR-10's: frozen lr 1e-3 diverges to 1% / NaN within 20 batches even
+#    with lambda = 0; frozen lr 1e-4 (5 ep) is stable but gains no robustness (1-3% @8/255).
+#    Variance flooring is not an option (76% of channels would change; accuracy -> 1%).
+#  * Train-mode BN is scale-invariant. After 2 epochs, DKD: joint 1e-3 54.2/15.5, both 1e-3
+#    54.7/15.9, joint 3e-4 59.1/14.1, frozen 3e-4 61.4/11.6; FT-AL joint 1e-3 49.4/13.4;
+#    Knockoff joint 1e-3 56.9/16.9. No statistics switch (train-mode vs deployed gap <= 4 pt).
+#  * joint is chosen over both because a clean/adv statistics switch cannot be learned when
+#    both halves are normalised together; lr 3e-4 over 1e-3 keeps ~5 pt more clean accuracy
+#    for ~1.4 pt less robustness.
+#  * Clean-priority tilt (user, 2026-09-23). Lowering only lambda does not work: FT-AL lambda 0.25
+#    2 ep 65.2/0.6 vs lambda 1 66.1/11.7 (DKD: 1 -> 0.5 -> 0.25 = 59.1/14.1 -> 65.5/8.8 -> 70.8/5.9).
+#    Adversarial share of the batch instead (adv_fraction 0.25, lambda 1), 2 ep: DKD 67.6/13.3.
+#    Clean-only control (no AT) at lr 3e-4, 2 ep: FT-AL 65.4 (drift from the lr alone), DKD 73.1,
+#    Knockoff 71.9 -> the early FT-AL drop is optimiser drift, which the cosine schedule recovers.
+#    FULL 30-epoch schedule, adv_fraction 0.25, 8/255 (best_clean / final clean / final robust):
+#      FT-AL lr 3e-4: 71.87 / 71.54 / 19.6   lr 1e-4: 71.66 / 70.49 / 17.6   (source 73.46)
+#      DKD   lr 3e-4: 71.44 / 71.27 / 19.6   lr 1e-4: 71.35 / 71.23 / 19.1   (source 75.41)
+#    -> lr 3e-4 kept (not worse on either axis). Validate every model with
+#    diagnose_bn_modes.py --policy joint --plan saved_exp_plan/ft_plan_c100/CIFAR100_RES18_FT_Same_25000.yaml
+# ======================================================================
+Model_Path:
+  - /ft_final/CIFAR-100_ResNet-18_25000_Same_25000_42_1.0_FT-AL_ftsize=25000_ftseed=0
+  - /kd_final/CIFAR-100_ResNet-18to18_25000_DKD_0_0.0
+  - /extraction_final/CIFAR-100_ResNet-18_25000_Knockoff_Same100_Same18_0_1.0
+  # Optional extension (source-seed variance; FT-AL 73.42/73.41, Knockoff 71.32/71.43):
+  # - /ft_final/CIFAR-100_ResNet-18_25000_Same_25000_42_1.0_FT-AL_ftsize=25000_ftseed=1
+  # - /ft_final/CIFAR-100_ResNet-18_25000_Same_25000_42_1.0_FT-AL_ftsize=25000_ftseed=2
+  # - /extraction_final/CIFAR-100_ResNet-18_25000_Knockoff_Same100_Same18_1_1.0
+  # - /extraction_final/CIFAR-100_ResNet-18_25000_Knockoff_Same100_Same18_2_1.0
+
+Dataset:
+  name: CIFAR-100
+  normalization: cifar100
+  img_size: 32
+  train_transforms:
+    - {name: RandomCrop, params: {size: 32, padding: 4}}
+    - {name: RandomHorizontalFlip, params: {p: 0.5}}
+    - {name: ToTensor}
+    - {name: Normalize}
+  test_transforms:
+    - {name: ToTensor}
+    - {name: Normalize}
+  group_size: 25000
+  note: same
+
+Model: ResNet-18
+
+AdversarialTraining:
+  form: additive      # L = CE(x) + lambda * CE(x_adv); weights used as given
+  lambda: 1.0
+  bn_policy: joint    # joint | frozen | both (main_at_posthoc.POSTHOC_BN_POLICIES)
+  adv_fraction: 0.25  # PGD copies for 1/4 of each batch: 128 clean + 32 adversarial per step
+
+Attack:
+  name: PGD
+  eps: [0.007843, 0.015686, 0.031373]   # 2/255, 4/255, 8/255
+  steps: 10
+
+Optimizer:
+  name: SGD
+  params:
+    lr: 0.0003
+    momentum: 0.9
+    weight_decay: 0.0005
+    nesterov: true
+  Epochs: 30
+
+Scheduler:
+  name: CosineAnnealingLR
+  params:
+    T_max: auto
+    eta_min: 0.000001
+
+BatchSize: 128

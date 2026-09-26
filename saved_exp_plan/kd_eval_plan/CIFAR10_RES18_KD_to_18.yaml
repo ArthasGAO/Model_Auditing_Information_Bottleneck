@@ -1,0 +1,42 @@
+# KD positives shown in the screenshot; best student checkpoint per folder.
+# Model_Path is relative to saved_models. Both overlap rates are positives.
+# Scenario_Name identifies the victim and reuses its ADV_TRA cache.
+Scenario_Name: CIFAR-10_ResNet-18_25000_42_1.0
+Victim:
+  Model_Name: CIFAR-10_ResNet-18_25000
+  Model: ResNet-18
+  Dataset:
+    name: CIFAR-10
+    normalization: cifar10
+    img_size: 32
+    group_size: 25000
+    download: false
+Positive:
+  Model: ResNet-18
+  Checkpoint_Format: kd
+  State: best
+  Require_Checkpoints: true
+  Model_Path:
+  - kd_vanilla/CIFAR-10_ResNet-18to18_25000_DKD_42_0.0
+  - kd_vanilla/CIFAR-10_ResNet-18to18_25000_DKD_42_1.0
+  - kd_vanilla/CIFAR-10_ResNet-18to18_25000_FitNet_42_0.0
+  - kd_vanilla/CIFAR-10_ResNet-18to18_25000_FitNet_42_1.0
+  - kd_vanilla/CIFAR-10_ResNet-18to18_25000_KD_42_0.0
+  - kd_vanilla/CIFAR-10_ResNet-18to18_25000_KD_42_1.0
+Attack:
+  name: PGD
+  eps: 0.03
+  steps: 10
+  step_size: 0.003
+IPGuard:
+  k_Params:
+  - 5
+  Sizes:
+  - 100
+  Master_CSV: saved_logs/at_eval/kd_positive_2026-09-09/IPGuard/master.csv
+DeepJudge:
+  Batch_Size: 64
+  Master_CSV: saved_logs/at_eval/kd_positive_2026-09-09/DeepJudge/master.csv
+ADV_TRA:
+  Log_Dir: saved_logs/at_eval/kd_positive_2026-09-09/ADV_TRA
+Evaluation_Output: saved_logs/at_eval/kd_positive_2026-09-09

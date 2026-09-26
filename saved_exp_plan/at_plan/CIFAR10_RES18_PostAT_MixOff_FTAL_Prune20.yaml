@@ -1,0 +1,100 @@
+# ======================================================================
+# CIFAR-10 post-hoc adversarial fine-tuning of the four derived models of one victim,
+# pure-adversarial recipe (mix=off). Driver: main_at.py.
+# Victim: CIFAR-10_ResNet-18_25000_42_1.0 (93.90% clean).
+#
+# Purpose: an epoch-by-epoch TRAJECTORY. main_at.py checkpoints every epoch
+# (saved_models/at_evasion/<scenario>/epoch_0.pth ... epoch_29.pth, plus
+# best_clean_epoch.pth / best_rob_epoch.pth), so MI can be read at each one and each
+# suspect plotted as a path relative to the null instead of a single point.
+# Epoch -1 (the untouched source) is logged to the CSV but NOT checkpointed here --
+# it needs none, it IS the source model, whose MI is already in its own family's table.
+#
+# Recipe = the at_final / "mix=off" one already used on this victim: adversarial CE only
+# (use_mixed false -> clean_weight 0), BN running statistics updated from the adversarial
+# forward (bn=adv), SGD lr 0.01 cosine -> 1e-6, 30 epochs, eps 2/4/8 /255, PGD-10.
+# AT data: the other 25000 CIFAR-10 training images (group_B 0.0, disjoint from group_A),
+# ground-truth labels. Reference for what this recipe does to a model: at_final mix=off
+# lands around 81% clean / 45% robust from a ~93% clean start.
+#
+# Sources (best_epoch.pth), all ResNet-18 so all four share the one ResNet-18 negative pool.
+# Both attacks that build a NEW model are same-architecture on purpose: a different-architecture
+# surrogate would be judged against a different null and the four trajectories would not
+# share an axis.
+#   FT-AL      ft_final/...Same_25000_42_1.0_FT-AL_ftsize=25000_ftseed=0                  93.89%
+#   Prune20    pruning_final/...sparsity=0.2_FT-AL_ftsize=25000_ftseed=0                  94.21%  (20.00% zeros)
+#   DKD        kd_final/CIFAR-10_ResNet-18to18_25000_DKD_0_0.0                            93.42%  (RN18 -> RN18)
+#   Knockoff   extraction_final/CIFAR-10_ResNet-18_25000_Knockoff_Same10_Same18_0_1.0     92.29%  (RN18 -> RN18)
+# All four verified 2026-09-24 to load strict=True into Model.ResNet_18.ResNet18(num_classes=10);
+# the DKD checkpoint was written from ResNet18_dist and carries no extra keys.
+#
+# ---------------------------------------------------------------------------------------------
+# Aliases: required for FT-AL and Prune20, and not free-form
+# ---------------------------------------------------------------------------------------------
+# calculate_MI_at.parse_at_scenario_name splits the AT suffix into '=' pairs, so ANY '=' inside
+# the source part of the folder name makes a finished run unreadable downstream. The un-aliased
+# names carry ftsize=25000 / ftseed=0 / sparsity=0.2 and do NOT parse (checked); DKD and Knockoff
+# do. So those two get aliases with no '=' that keep the trailing _<seed>_<rate> the parser wants
+# (seed 0 = ftseed, rate 1.0 = the victim's). main_at.py gained optional Model_Path aliases for
+# this (parse_at_sources); a plain string entry behaves exactly as before, and <scenario>/source.json
+# records the real path. The same aliases name the mix=add variant of this experiment, so the two
+# recipes line up by name; they cannot collide, since the suffix differs (bn=adv_..._mix=off vs
+# bn=joint_..._mix=add) and they are written to different roots.
+#
+# NOT DONE HERE: main_at.py has no Keep_Zero_Mask. The pruned source's 20% zero weights are free to
+# regrow during AT, so by the end of that trajectory the model is no longer sparse. That is the
+# realistic attacker behaviour (nobody re-imposes a mask), but it means "Prune20" labels the
+# STARTING point, not the whole path. main_at_posthoc.py is the driver that can hold the mask.
+# HALF 1 of 2 -- FT-AL and Prune20. Run this half where the sources already live;
+# the other half (DKD, Knockoff) is CIFAR10_RES18_PostAT_MixOff_DKD_Knockoff.yaml and is
+# packaged for a second machine in at_traj_bundle/.
+# ======================================================================
+Model_Path:
+- Path: /ft_final/CIFAR-10_ResNet-18_25000_Same_25000_42_1.0_FT-AL_ftsize=25000_ftseed=0
+  Alias: C10_RN18_Same_FT-AL_0_1.0
+- Path: /pruning_final/CIFAR-10_ResNet-18_25000_Same_25000_42_1.0_sparsity=0.2_FT-AL_ftsize=25000_ftseed=0
+  Alias: C10_RN18_Same_Prune20-FT-AL_0_1.0
+
+Dataset:
+  name: CIFAR-10
+  normalization: cifar10
+  img_size: 32
+  train_transforms:
+    - {name: RandomCrop, params: {size: 32, padding: 4}}
+    - {name: RandomHorizontalFlip, params: {p: 0.5}}
+    - {name: ToTensor}
+    - {name: Normalize}
+  test_transforms:
+    - {name: ToTensor}
+    - {name: Normalize}
+  # main_at_pos uses group_B_25000_0.0_25000_seed42.npy, raw_train (augmented).
+  group_size: 25000
+  note: same
+
+Model: ResNet-18
+
+AdversarialTraining:
+  use_mixed: false
+  mix_rate: 0.0  # Ignored when use_mixed=false; loss is adversarial CE only.
+
+Attack:
+  name: PGD
+  eps: [0.007843, 0.015686, 0.031373]   # 2/255, 4/255, 8/255
+  steps: 10
+
+Optimizer:
+  name: SGD
+  params:
+    lr: 0.01
+    momentum: 0.9
+    weight_decay: 0.0005
+    nesterov: true
+  Epochs: 30
+
+Scheduler:
+  name: CosineAnnealingLR
+  params:
+    T_max: auto
+    eta_min: 0.000001
+
+BatchSize: 128
