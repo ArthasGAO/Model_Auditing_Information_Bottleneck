@@ -131,7 +131,7 @@ def train_extraction(plan, plan_path, seed, *, workers=4, epochs=None, skip_exis
 
     if measure_mi:
         util.set_seed(calculate_MI.SUBSET_SEED, deterministic=True)
-        calculate_MI.measure_checkpoint(STAGE, plan, best, ids, plan_path=plan_path)
+        calculate_MI.measure_checkpoint(STAGE, plan, best, ids)
     return save_dir
 
 

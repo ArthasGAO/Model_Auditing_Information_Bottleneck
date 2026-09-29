@@ -28,7 +28,9 @@ SUBSET_SEED = 42          # seed of the nested probe subsets, shared by every ta
 BATCH_SIZE = 128
 
 
-
+# ===========================================================================
+# 1. Estimator: softmax -> B equal-width bins -> plug-in I(X;T) = H(T) and I(T;Y)
+# ===========================================================================
 def _infer_num_classes(net):
     if hasattr(net, "fc"):
         return net.fc.out_features
@@ -42,6 +44,8 @@ def _infer_num_classes(net):
 
 
 def collect_logits(net, data_loader, device):
+    """Logits (N, K) and one-hot labels (N, K_y) of the model over the loader; the bins
+    sweep reuses them."""
     start_time = time.time()
     num_classes = _infer_num_classes(net)
     layer_T_list, label_list = [], []
@@ -51,19 +55,12 @@ def collect_logits(net, data_loader, device):
         for inputs, targets in data_loader:
             inputs = inputs.to(device)
             targets = targets.to(device)
-            outputs = net(inputs)
-            if isinstance(outputs, tuple):
-                outputs = outputs[0]
-            layer_T_list.append(outputs.detach())
-            label_list.append(F.one_hot(targets.detach(),
-                                        num_classes=num_classes).float())
+            layer_T_list.append(net(inputs).detach())
+            label_list.append(F.one_hot(targets.detach(), num_classes=num_classes).float())
 
     layer_T = torch.cat(layer_T_list, dim=0).to(dtype=torch.float32)
     label_matrix = torch.cat(label_list, dim=0).to(dtype=torch.float32)
-
-    end_time = time.time()
-    elapsed_time = end_time - start_time
-    print(f"logits inference costs: {elapsed_time}")
+    print(f"logits inference costs: {time.time() - start_time:.1f}s")
     return layer_T, label_matrix
 
 
@@ -75,8 +72,8 @@ def MI_formula_cal(matrix, p1, p2):
     return (matrix * log_ratio)[mask].sum()
 
 
-def mi_from_logits(layer_T, label_matrix, num_intervals=50, verbose=False):
-    start_time = time.time()
+def mi_from_logits(layer_T, label_matrix, num_intervals=50):
+    """(I(X;T), I(T;Y)) in bits after bucketising the softmax into num_intervals bins."""
     device = layer_T.device
     N = layer_T.shape[0]
 
@@ -102,42 +99,12 @@ def mi_from_logits(layer_T, label_matrix, num_intervals=50, verbose=False):
     P_T_marg = TY_matrix.sum(dim=1)
     P_Y_marg = TY_matrix.sum(dim=0)
     I_T_Y = MI_formula_cal(TY_matrix, P_T_marg, P_Y_marg)
-
-    if not verbose:
-        return I_X_T.item(), I_T_Y.item()
-
-    debug_data = {
-        "T_soft":         T_soft.detach().cpu().numpy().astype(np.float32),
-        "T_discrete":     T_discrete.detach().cpu().numpy().astype(np.int16),
-        "unique_T":       unique_T.detach().cpu().numpy().astype(np.int16),
-        "inverse_idx":    inverse_idx.detach().cpu().numpy().astype(np.int32),
-        "pattern_counts": T_counts.detach().cpu().numpy().astype(np.int64),
-        "label_counts":   TY_counts.detach().cpu().numpy().astype(np.int64),
-        "N":              np.int64(N),
-        "K":              np.int64(layer_T.shape[1]),
-        "K_y":            np.int64(K_y),
-        "U":              np.int64(K_unique),
-        "num_intervals":  np.int64(num_intervals),
-        "I_X_T":          np.float64(I_X_T.item()),
-        "I_T_Y":          np.float64(I_T_Y.item()),
-    }
-
-    end_time = time.time()
-    elapsed_time = end_time - start_time
-    print(f"MI cal costs: {elapsed_time}")
-    return I_X_T.item(), I_T_Y.item(), debug_data
+    return I_X_T.item(), I_T_Y.item()
 
 
-def save_verbose_data(debug_data, save_dir, model_name, num_intervals, in_size):
-    """Save verbose debug data to a structured .npz file."""
-    out_dir = Path(save_dir) / model_name
-    out_dir.mkdir(parents=True, exist_ok=True)
-    out_path = out_dir / f"in_size{in_size}_bins{num_intervals}.npz"
-    np.savez_compressed(out_path, **debug_data)
-    return out_path
-
-
-
+# ===========================================================================
+# 2. Nested class-balanced probe subsets of group_A (cached under Indices/<dataset>/)
+# ===========================================================================
 def sizes_from_rates(training_size, rates):
     if type(training_size) is not int or training_size <= 0:
         raise ValueError("training_size must be a positive integer")
@@ -226,18 +193,23 @@ def create_nested_balanced_subsets(dataset, group_A, save_dir, subset_sizes,
     return result
 
 
+def nested_subsets_filename(group_size, subset_seed=SUBSET_SEED):
+    """Cache file of the nested probe subsets under Indices/<dataset>/."""
+    return f"nested_subsets_{int(group_size)}_seed{subset_seed}.npz"
+
+
+# ===========================================================================
+# 3. Master table: one row per (model, in_size, bins), single-writer resume protocol
+# ===========================================================================
 MI_COLUMNS = [
-    "Scenario", "seed", "rate", "model_name", "epoch", "bins", "in_size",
-    "I(X;T)", "I(T;Y)", "timestamp",
-    "stage", "victim_scenario", "suspect_arch", "ckpt_kind", "model_seed", "training_size", "in_size_rate",
-    "subset_seed", "group_seed",
-    "strategy", "sparsity", "achieved_sparsity", "kd_method", "attack", "substitute_model",
-    "aux_dataset",
-    "checkpoint", "checkpoint_sha256", "plan_sha256",
+    "Scenario", "seed", "rate", "model_name", "bins", "in_size", "I(X;T)", "I(T;Y)", "timestamp",
+    "stage", "victim_scenario", "suspect_arch", "training_size", "in_size_rate",
+    "strategy", "sparsity", "achieved_sparsity", "kd_method", "aux_dataset", "checkpoint",
 ]
 
 
 def ensure_table(csv_path):
+    """Create the table with MI_COLUMNS, or refuse a file whose header differs."""
     csv_path = Path(csv_path)
     if csv_path.exists():
         with csv_path.open(newline="", encoding="utf-8-sig") as stream:
@@ -256,6 +228,11 @@ def append_row(csv_path, row):
 
 
 def missing_mi_grid(csv_path, model_name, scenario, seed, rate, in_sizes, bins):
+    """Validate the model's rows and return the (in_size, bins) cells still missing.
+
+    Invalid/duplicate rows are errors, never silently treated as completed.
+    This is a single-writer resume protocol, not a concurrent CSV job queue.
+    """
     sizes = positive_ints(in_sizes, "in_sizes")
     bins = positive_ints(bins, "bins")
     present = set()
@@ -280,13 +257,17 @@ def missing_mi_grid(csv_path, model_name, scenario, seed, rate, in_sizes, bins):
     return [(s, b) for s in sizes for b in bins if (s, b) not in present]
 
 
-def nested_subsets_filename(group_size, subset_seed=SUBSET_SEED):
-    return f"nested_subsets_{int(group_size)}_seed{subset_seed}.npz"
-
-
+# ===========================================================================
+# 4. Measuring one model
+# ===========================================================================
 def mi_grid(net, dataset_obj, ds_cfg, group_size, num_classes, in_sizes, bins, *,
-            needed_pairs=None, subset_seed=SUBSET_SEED, batch_size=BATCH_SIZE,
-            record_verbose=False, verbose_dir=None, model_name=""):
+            needed_pairs=None, subset_seed=SUBSET_SEED, batch_size=BATCH_SIZE, model_name=""):
+    """(I(X;T), I(T;Y)) on the nested group_A subsets for every (in_size, bins).
+
+    Inference runs once per needed in_size; the bins sweep reuses the cached logits.
+    `needed_pairs` restricts the work to the cells still missing from a table.
+    Returns {(in_size, bins): (ixt, ity)}.
+    """
     in_sizes = positive_ints(in_sizes, "in_sizes")
     bins = positive_ints(bins, "bins")
     needed = set(needed_pairs) if needed_pairs is not None else {(s, b) for s in in_sizes for b in bins}
@@ -295,6 +276,9 @@ def mi_grid(net, dataset_obj, ds_cfg, group_size, num_classes, in_sizes, bins, *
     idx_dir = util.indices_dir(ds_cfg)
     group_A = util.load_group_A(dataset_obj, ds_cfg, group_size, num_classes)
     in_sample_set = dataset_obj.in_sample_set
+    # The probe subsets are a function of (group_A, subset_seed); group_A of (dataset,
+    # group_size, GROUP_SEED). The cache name carries the group size so two scenarios
+    # of one dataset with different training sizes never collide.
     nested = create_nested_balanced_subsets(dataset=in_sample_set, group_A=group_A, save_dir=str(idx_dir),
                                             subset_sizes=in_sizes, num_classes=num_classes,
                                             seed=subset_seed, force_rebuild=False,
@@ -318,11 +302,7 @@ def mi_grid(net, dataset_obj, ds_cfg, group_size, num_classes, in_sizes, bins, *
         for nb in needed_bins:
             if (in_size, nb) not in needed:
                 continue
-            if record_verbose:
-                ixt, ity, dbg = mi_from_logits(logits, labels, num_intervals=nb, verbose=True)
-                save_verbose_data(dbg, verbose_dir, model_name, nb, in_size)
-            else:
-                ixt, ity = mi_from_logits(logits, labels, num_intervals=nb, verbose=False)
+            ixt, ity = mi_from_logits(logits, labels, num_intervals=nb)
             if not np.isfinite([ixt, ity]).all():
                 raise ValueError(f"Nonfinite MI: {model_name}, in_size={in_size}, bins={nb}")
             results[(in_size, nb)] = (ixt, ity)
@@ -332,36 +312,29 @@ def mi_grid(net, dataset_obj, ds_cfg, group_size, num_classes, in_sizes, bins, *
     return results
 
 
-def _identity(stage, plan, ids, ckpt_kind):
+def _identity(stage, plan, ids):
+    """The identity columns of one model, from the ids the trainer used to name it."""
     scenario = plan["Scenario_Name"]
-    victim = scenario if stage in ("victim", "negative") else util.victim_scenario(plan)
-    name = util.model_name(stage, plan, **ids)
-    if ckpt_kind != "best":
-        name = f"{name}_ckpt={ckpt_kind}"
-    row = {"Scenario": scenario, "model_name": name, "epoch": ckpt_kind, "stage": stage,
-           "victim_scenario": victim, "suspect_arch": util.suspect_arch(stage, plan), "ckpt_kind": ckpt_kind,
-           "rate": round(float(ids["rate"]), 2), "subset_seed": SUBSET_SEED, "group_seed": util.GROUP_SEED}
-    if stage in ("victim", "negative"):
-        row.update(seed=ids["seed"], model_seed=ids["seed"])
-    elif stage in ("fine_tune", "prune"):
-        row.update(seed=ids["ft_seed"], model_seed=ids["model_seed"], strategy=ids["strategy"])
-        if stage == "prune":
-            row["sparsity"] = round(float(ids["sparsity"]), 6)
-    elif stage == "distillation":
-        row.update(seed=ids["seed"], model_seed=util.VICTIM_SEED, kd_method=ids["method"])
-    elif stage == "extraction":
-        row.update(seed=ids["seed"], model_seed=util.VICTIM_SEED,
-                   attack="Knockoff",
-                   substitute_model=util.suspect_arch(stage, plan),
-                   aux_dataset=plan.get("Auxiliary_Dataset", util.victim_dataset_cfg(plan)).get("name", ""))
-    else:
-        raise ValueError(f"Unknown stage {stage!r}")
+    row = {"Scenario": scenario, "model_name": util.model_name(stage, plan, **ids), "stage": stage,
+           "victim_scenario": scenario if stage in ("victim", "negative") else util.victim_scenario(plan),
+           "suspect_arch": util.suspect_arch(stage, plan), "rate": round(float(ids["rate"]), 2)}
+    if stage in ("victim", "negative", "distillation", "extraction"):
+        row["seed"] = ids["seed"]
+    else:                                                   # fine_tune / prune: the recovery seed
+        row["seed"], row["strategy"] = ids["ft_seed"], ids["strategy"]
+    if stage == "prune":
+        row["sparsity"] = round(float(ids["sparsity"]), 6)
+    if stage == "distillation":
+        row["kd_method"] = ids["method"]
+    if stage == "extraction":
+        row["aux_dataset"] = plan.get("Auxiliary_Dataset", util.victim_dataset_cfg(plan)).get("name", "")
     return row
 
 
-def measure_model(net, plan, stage, ids, *, ckpt_kind="best", checkpoint=None, plan_path=None,
-                  csv_path=None, in_size_rates=None, bins=None, extra=None,
-                  record_verbose=False, batch_size=BATCH_SIZE, dataset=None):
+def measure_model(net, plan, stage, ids, *, checkpoint=None, csv_path=None, in_size_rates=None,
+                  bins=None, extra=None, batch_size=BATCH_SIZE, dataset=None):
+    """Measure an in-memory model on the grid and append the missing cells to the stage table.
+    Returns the number of rows written."""
     ds_cfg = util.victim_dataset_cfg(plan)
     dataset_obj, num_classes, group_size = dataset or util.build_dataset_from_yaml(ds_cfg)
     rates = list(IN_SIZE_RATES if in_size_rates is None else in_size_rates)
@@ -369,13 +342,10 @@ def measure_model(net, plan, stage, ids, *, ckpt_kind="best", checkpoint=None, p
     bins = positive_ints(list(BINS if bins is None else bins), "bins")
     csv_path = Path(csv_path) if csv_path is not None else util.mi_table_path(stage)
 
-    row = _identity(stage, plan, ids, ckpt_kind)
+    row = _identity(stage, plan, ids)
     row["training_size"] = group_size
     if checkpoint is not None:
         row["checkpoint"] = str(Path(checkpoint).resolve())
-        row["checkpoint_sha256"] = util.file_sha256(checkpoint)
-    if plan_path is not None:
-        row["plan_sha256"] = util.file_sha256(plan_path)
     if extra:
         row.update(extra)
 
@@ -388,8 +358,7 @@ def measure_model(net, plan, stage, ids, *, ckpt_kind="best", checkpoint=None, p
     print(f"==> [{row['model_name']}] {len(missing)} cell(s) to compute -> {csv_path}")
     net = net.to(device)
     results = mi_grid(net, dataset_obj, ds_cfg, group_size, num_classes, in_sizes, bins,
-                      needed_pairs=missing, batch_size=batch_size, record_verbose=record_verbose,
-                      verbose_dir=util.stage_log_root(stage) / "MI_verbose", model_name=row["model_name"])
+                      needed_pairs=missing, batch_size=batch_size, model_name=row["model_name"])
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     written = 0
     for (in_size, nb) in sorted(results):
@@ -403,22 +372,23 @@ def measure_model(net, plan, stage, ids, *, ckpt_kind="best", checkpoint=None, p
     return written
 
 
-def measure_checkpoint(stage, plan, ckpt_path, ids, *, ckpt_kind="best", plan_path=None, **kwargs):
+def measure_checkpoint(stage, plan, ckpt_path, ids, **kwargs):
     """Build the architecture the stage produces, load `ckpt_path`, and measure it."""
     ds_cfg = util.victim_dataset_cfg(plan)
     dataset = util.build_dataset_from_yaml(ds_cfg)
     num_classes = dataset[1]
-    arch = util.suspect_arch(stage, plan)
-    net = util.build_model(arch, num_classes)
+    net = util.build_model(util.suspect_arch(stage, plan), num_classes)
     net.load_state_dict(util.load_state(ckpt_path, map_location=device))
     net.to(device).eval()
     extra = dict(kwargs.pop("extra", None) or {})
     if stage == "prune" and "achieved_sparsity" not in extra:
         extra["achieved_sparsity"] = f"{util.check_pruned_weights(net):.6f}"
-    return measure_model(net, plan, stage, ids, ckpt_kind=ckpt_kind, checkpoint=ckpt_path,
-                         plan_path=plan_path, extra=extra, dataset=dataset, **kwargs)
+    return measure_model(net, plan, stage, ids, checkpoint=ckpt_path, extra=extra, dataset=dataset, **kwargs)
 
 
+# ===========================================================================
+# 5. CLI: measure every trained model of a stage that is not yet in its table
+# ===========================================================================
 def measure_stage(stage, plan_filters=(), seeds=None, in_size_rates=None, bins=None,
                   plan_dir=None, data_root=None, deterministic=True):
     plans = util.plan_files(stage, plan_filters, plan_dir)
@@ -434,8 +404,7 @@ def measure_stage(stage, plan_filters=(), seeds=None, in_size_rates=None, bins=N
                 absent += 1
                 continue
             util.set_seed(SUBSET_SEED, deterministic=deterministic)
-            written += measure_checkpoint(stage, plan, ckpt, ids, plan_path=plan_path,
-                                          in_size_rates=in_size_rates, bins=bins)
+            written += measure_checkpoint(stage, plan, ckpt, ids, in_size_rates=in_size_rates, bins=bins)
     print(f"\n==> {stage}: {written} new row(s) in {util.mi_table_path(stage)}; {absent} checkpoint(s) absent")
     return written
 

@@ -93,7 +93,7 @@ def train_prune(plan, plan_path, ft_seed, *, sparsities=None, workers=4, epochs=
             ids = {**base_ids, "sparsity": s}
             best = util.model_dir(STAGE, plan, **ids) / util.BEST_CHECKPOINT
             util.set_seed(calculate_MI.SUBSET_SEED, deterministic=True)
-            calculate_MI.measure_checkpoint(STAGE, plan, best, ids, plan_path=plan_path)
+            calculate_MI.measure_checkpoint(STAGE, plan, best, ids)
 
 
 def run(argv=None):

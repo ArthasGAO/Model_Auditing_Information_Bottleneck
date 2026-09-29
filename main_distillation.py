@@ -80,7 +80,7 @@ def train_distillation(plan, plan_path, seed, *, methods=None, rate=util.NEGATIV
             ids = {"method": method, "seed": seed, "rate": rate}
             best = util.model_dir(STAGE, plan, **ids) / util.BEST_CHECKPOINT
             util.set_seed(calculate_MI.SUBSET_SEED, deterministic=True)
-            calculate_MI.measure_checkpoint(STAGE, plan, best, ids, plan_path=plan_path)
+            calculate_MI.measure_checkpoint(STAGE, plan, best, ids)
 
 
 def run(argv=None):

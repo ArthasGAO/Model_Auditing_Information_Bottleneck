@@ -1,5 +1,4 @@
 import csv
-import hashlib
 import os
 import random
 from pathlib import Path
@@ -11,7 +10,6 @@ import torch.nn.utils.prune as prune
 import torch.optim as optim
 import torch.optim.lr_scheduler as lr_sched
 import yaml
-from sklearn.metrics import f1_score, precision_score, recall_score
 
 from Dataset.CIFAR_10 import CIFAR10Dataset
 from Dataset.CIFAR_100 import CIFAR100Dataset
@@ -158,10 +156,6 @@ def suspect_arch(stage, plan):
 
 
 def plan_files(stage, filters=(), plan_dir=None):
-    """The stage's *.yaml plans, optionally selected by name. A filter picks the plans whose
-    file stem equals it or contains it as a `_`-separated token (`CIFAR10` selects
-    CIFAR10_ResNet18 but not CIFAR100_VGG16); one that matches nothing that way falls back
-    to a substring match on the file name."""
     files = sorted(Path(plan_dir if plan_dir else stage_plan_dir(stage)).glob("*.yaml"))
     if not filters:
         return files
@@ -172,14 +166,6 @@ def plan_files(stage, filters=(), plan_dir=None):
             hits = [p for p in files if f in p.name.lower()]
         chosen.extend(p for p in hits if p not in chosen)
     return sorted(chosen)
-
-
-def file_sha256(path):
-    digest = hashlib.sha256()
-    with Path(path).open("rb") as stream:
-        for block in iter(lambda: stream.read(1024 * 1024), b""):
-            digest.update(block)
-    return digest.hexdigest()
 
 
 def parse_seeds(spec):
@@ -271,9 +257,7 @@ def normalize_transform_specs(specs):
 def process_yaml_file(file_path):
     try:
         with open(file_path, 'r') as file:
-            data = yaml.safe_load(file)
-        print(f"this time experiment blueprint:{data}")
-        return data
+            return yaml.safe_load(file)
 
     except FileNotFoundError:
         print(f"Error: The file '{file_path}' was not found.")
@@ -656,155 +640,51 @@ def determine_ft_dataset(exp_yaml, exp_setup, group_A):
 
 def train_one_epoch(net, trainloader, optimizer, criterion, epoch, device):
     print(f'\nEpoch: {epoch}')
-    running_loss = 0.0
-    correct = 0
-    total = 0
-    all_preds, all_targets = [], []
-
     net.train()
-    for batch_idx, (inputs, targets) in enumerate(trainloader):
+    running_loss = correct = total = 0
+    for inputs, targets in trainloader:
         inputs, targets = inputs.to(device), targets.to(device)
         optimizer.zero_grad()
-
         outputs = net(inputs)
-        if isinstance(outputs, tuple):
-            outputs = outputs[0]
         loss = criterion(outputs, targets)
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(net.parameters(), max_norm=1.0) # to avoid gradient spikes
+        torch.nn.utils.clip_grad_norm_(net.parameters(), max_norm=1.0)   # to avoid gradient spikes
         optimizer.step()
-
-        running_loss += loss.item() * len(targets)
-        _, predicted = outputs.max(1)
+        running_loss += loss.item() * targets.size(0)
         total += targets.size(0)
-        correct += predicted.eq(targets).sum().item()
-
-        # store for sklearn metrics
-        all_preds.append(predicted.detach().cpu().numpy())
-        all_targets.append(targets.detach().cpu().numpy())
-
-    # concatenate all batches
-    all_preds = np.concatenate(all_preds)
-    all_targets = np.concatenate(all_targets)
-
-    # accuracy
-    avg_loss = running_loss / total
-    avg_acc = 100. * correct / total
-
-    precision = precision_score(all_targets, all_preds, average="weighted", zero_division=0)
-    recall = recall_score(all_targets, all_preds, average="weighted", zero_division=0)
-    f1 = f1_score(all_targets, all_preds, average="weighted", zero_division=0)
-
-    print(f'\nEpoch: {epoch} ends')
-    return {
-            "train_loss": avg_loss,
-            "train_acc": avg_acc,
-            "train_precision": precision,
-            "train_recall": recall,
-            "train_f1": f1
-            }
+        correct += outputs.argmax(1).eq(targets).sum().item()
+    return {"train_loss": running_loss / total, "train_acc": 100. * correct / total}
 
 
 def train_one_epoch_kd(distiller, trainloader, optimizer, epoch, device):
     print(f'\nEpoch: {epoch}')
-    running_loss = 0.0
-    correct = 0
-    total = 0
-    all_preds, all_targets = [], []
-
-    distiller.train() 
-    
-    for batch_idx, (inputs, targets) in enumerate(trainloader):
+    distiller.train()                        # student in train mode, teacher kept in eval
+    running_loss = correct = total = 0
+    for inputs, targets in trainloader:
         inputs, targets = inputs.to(device), targets.to(device)
         optimizer.zero_grad()
-
-        logits, losses_dict = distiller(image=inputs, target=targets, epoch=epoch)
-        
-        # The total loss is the sum of CE loss and Distillation/Feature loss
+        logits, losses_dict = distiller(image=inputs, target=targets, epoch=epoch)   # epoch drives the DKD warmup
         loss = sum(losses_dict.values())
-        
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(distiller.parameters(), max_norm=1.0) 
-        
+        torch.nn.utils.clip_grad_norm_(distiller.parameters(), max_norm=1.0)
         optimizer.step()
-
-        running_loss += loss.item() * targets.size(0) 
-        _, predicted = logits.max(1)
+        running_loss += loss.item() * targets.size(0)
         total += targets.size(0)
-        correct += predicted.eq(targets).sum().item()
-
-        # store for sklearn metrics
-        all_preds.append(predicted.detach().cpu().numpy())
-        all_targets.append(targets.detach().cpu().numpy())
-
-    # concatenate all batches
-    all_preds = np.concatenate(all_preds)
-    all_targets = np.concatenate(all_targets)
-
-    # average metrics over the epoch
-    avg_loss = running_loss / total
-    avg_acc = 100. * correct / total
-
-    precision = precision_score(all_targets, all_preds, average="weighted", zero_division=0)
-    recall = recall_score(all_targets, all_preds, average="weighted", zero_division=0)
-    f1 = f1_score(all_targets, all_preds, average="weighted", zero_division=0)
-
-    print(f'\nEpoch: {epoch} ends')
-    return {
-            "train_loss": avg_loss,
-            "train_acc": avg_acc,
-            "train_precision": precision,
-            "train_recall": recall,
-            "train_f1": f1
-            }
+        correct += logits.argmax(1).eq(targets).sum().item()
+    return {"train_loss": running_loss / total, "train_acc": 100. * correct / total}
 
 
-def evaluate1(net, test_loader, criterion, device): # Used to calculate the test performance
+def evaluate1(net, test_loader, criterion, device):
     net.eval()
-    test_loss = 0.0
-    correct = 0
-    total = 0
-    all_preds, all_targets = [], []
-
+    test_loss = correct = total = 0
     with torch.no_grad():
-        for batch_idx, (inputs, targets) in enumerate(test_loader):
+        for inputs, targets in test_loader:
             inputs, targets = inputs.to(device), targets.to(device)
             outputs = net(inputs)
-
-            if isinstance(outputs, tuple):
-                outputs = outputs[0]
-
-            loss = criterion(outputs, targets)
-
-            batch_size = targets.size(0)
-            test_loss += loss.item() * batch_size
-            _, predicted = outputs.max(1)
-            total += batch_size
-            correct += predicted.eq(targets).sum().item()
-
-            # store for sklearn metrics
-            all_preds.append(predicted.detach().cpu().numpy())
-            all_targets.append(targets.detach().cpu().numpy())
-
-    # concat all batches
-    all_preds = np.concatenate(all_preds)
-    all_targets = np.concatenate(all_targets)
-
-    avg_loss = test_loss / total
-    avg_acc = 100. * correct / total
-
-    # weighted-averaged metrics over the whole test set
-    precision = precision_score(all_targets, all_preds, average="weighted", zero_division=0)
-    recall = recall_score(all_targets, all_preds, average="weighted", zero_division=0)
-    f1 = f1_score(all_targets, all_preds, average="weighted", zero_division=0)
-
-    return {
-            "test_loss": avg_loss,
-            "test_acc": avg_acc,
-            "test_precision": precision,
-            "test_recall": recall,
-            "test_f1": f1
-            }
+            test_loss += criterion(outputs, targets).item() * targets.size(0)
+            total += targets.size(0)
+            correct += outputs.argmax(1).eq(targets).sum().item()
+    return {"test_loss": test_loss / total, "test_acc": 100. * correct / total}
 
 
 def query_victim(victim_net, dataloader, device, temperature=1.0):
@@ -822,10 +702,6 @@ def query_victim(victim_net, dataloader, device, temperature=1.0):
         for batch_idx, (inputs, _) in enumerate(dataloader):
             inputs = inputs.to(device)
             outputs = victim_net(inputs)
-
-            if isinstance(outputs, tuple):
-                outputs = outputs[0]
-
             # Convert logits to soft probabilities
             soft_labels = torch.softmax(outputs / temperature, dim=1)
 
@@ -838,51 +714,21 @@ def query_victim(victim_net, dataloader, device, temperature=1.0):
 
 
 def train_one_epoch_knockoff(net, trainloader, optimizer, criterion, epoch, device):
-    """Training loop for knockoff attack with soft labels."""
+    """One epoch on the victim's soft labels; accuracy is measured against their argmax."""
     print(f'\nEpoch: {epoch}')
-    running_loss = 0.0
-    correct = 0
-    total = 0
-    all_preds, all_targets = [], []
-
     net.train()
-    for batch_idx, (inputs, soft_targets) in enumerate(trainloader):
+    running_loss = correct = total = 0
+    for inputs, soft_targets in trainloader:
         inputs, soft_targets = inputs.to(device), soft_targets.to(device)
         optimizer.zero_grad()
-
         outputs = net(inputs)
         loss = criterion(outputs, soft_targets)
         loss.backward()
-        # torch.nn.utils.clip_grad_norm_(net.parameters(), max_norm=1.0)
         optimizer.step()
-
         running_loss += loss.item() * inputs.size(0)
-        _, predicted = outputs.max(1)
-        _, hard_targets = soft_targets.max(1)  # convert soft labels to hard for accuracy
         total += inputs.size(0)
-        correct += predicted.eq(hard_targets).sum().item()
-
-        all_preds.append(predicted.detach().cpu().numpy())
-        all_targets.append(hard_targets.detach().cpu().numpy())
-
-    all_preds = np.concatenate(all_preds)
-    all_targets = np.concatenate(all_targets)
-
-    avg_loss = running_loss / total
-    avg_acc = 100. * correct / total
-
-    precision = precision_score(all_targets, all_preds, average="weighted", zero_division=0)
-    recall = recall_score(all_targets, all_preds, average="weighted", zero_division=0)
-    f1 = f1_score(all_targets, all_preds, average="weighted", zero_division=0)
-
-    print(f'\nEpoch: {epoch} ends')
-    return {
-        "train_loss": avg_loss,
-        "train_acc": avg_acc,
-        "train_precision": precision,
-        "train_recall": recall,
-        "train_f1": f1
-    }
+        correct += outputs.argmax(1).eq(soft_targets.argmax(1)).sum().item()
+    return {"train_loss": running_loss / total, "train_acc": 100. * correct / total}
 
 
 def evaluate_fidelity(victim_net, substitute_net, dataloader, device):
@@ -896,15 +742,8 @@ def evaluate_fidelity(victim_net, substitute_net, dataloader, device):
         for inputs, _ in dataloader:
             inputs = inputs.to(device)
 
-            v_out = victim_net(inputs)
-            if isinstance(v_out, tuple):
-                v_out = v_out[0]
-            s_out = substitute_net(inputs)
-            if isinstance(s_out, tuple):
-                s_out = s_out[0]
-
-            v_pred = v_out.argmax(dim=1)
-            s_pred = s_out.argmax(dim=1)
+            v_pred = victim_net(inputs).argmax(dim=1)
+            s_pred = substitute_net(inputs).argmax(dim=1)
 
             agree += (v_pred == s_pred).sum().item()
             total += inputs.size(0)
@@ -991,66 +830,30 @@ def setup_finetune(model, strategy, num_classes=None, device='cuda',
 
 
 def set_backbone_eval_norm_dropout(model):
+    """FT-LL: keep BatchNorm statistics and Dropout frozen while the classifier trains."""
     for m in model.modules():
         if isinstance(m, (nn.BatchNorm1d, nn.BatchNorm2d, nn.Dropout)):
-            m.eval()
-        elif isinstance(m, nn.LayerNorm):
-            m.eval()
-        elif m.__class__.__name__ in ("DropPath", "StochasticDepth"):
             m.eval()
 
 
 def ft_one_epoch(net, trainloader, optimizer, criterion, epoch, device, strategy,
                  freeze_backbone_norm=True):
     print(f'\nEpoch: {epoch}')
-    running_loss = 0.0
-    correct = 0
-    total = 0
-    all_preds, all_targets = [], []
-
     net.train()
-
     if strategy == "FT-LL" and freeze_backbone_norm:
         set_backbone_eval_norm_dropout(net)
-
-    for batch_idx, (inputs, targets) in enumerate(trainloader):
+    running_loss = correct = total = 0
+    for inputs, targets in trainloader:
         inputs, targets = inputs.to(device), targets.to(device)
         optimizer.zero_grad()
-
         outputs = net(inputs)
-        if isinstance(outputs, (tuple, list)) and len(outputs) == 2:
-            outputs = (outputs[0] + outputs[1]) / 2.0
-
         loss = criterion(outputs, targets)
         loss.backward()
         optimizer.step()
-
-        running_loss += loss.item() * len(targets)
-        _, predicted = outputs.max(1)
+        running_loss += loss.item() * targets.size(0)
         total += targets.size(0)
-        correct += predicted.eq(targets).sum().item()
-
-        all_preds.append(predicted.detach().cpu().numpy())
-        all_targets.append(targets.detach().cpu().numpy())
-
-    all_preds = np.concatenate(all_preds)
-    all_targets = np.concatenate(all_targets)
-
-    avg_loss = running_loss / total
-    avg_acc = 100. * correct / total
-
-    precision = precision_score(all_targets, all_preds, average="weighted", zero_division=0)
-    recall = recall_score(all_targets, all_preds, average="weighted", zero_division=0)
-    f1 = f1_score(all_targets, all_preds, average="weighted", zero_division=0)
-
-    print(f'\nEpoch: {epoch} ends')
-    return {
-        "train_loss": avg_loss,
-        "train_acc": avg_acc,
-        "train_precision": precision,
-        "train_recall": recall,
-        "train_f1": f1,
-    }
+        correct += outputs.argmax(1).eq(targets).sum().item()
+    return {"train_loss": running_loss / total, "train_acc": 100. * correct / total}
 
 
 def prune_model_global(model, amount, exclude_patterns=None):
@@ -1095,19 +898,7 @@ def load_state(path, map_location="cpu"):
     return state
 
 
-LOG_COLUMNS = ["Scenario", "Epoch", "Train_Loss", "Train_Acc", "Train_Precision", "Train_Recall",
-               "Train_F1", "Test_Loss", "Test_Acc", "Test_Precision", "Test_Recall", "Test_F1"]
-
-
-def _log_row(log_file, scenario_name, epoch, train_result, test_result):
-    with open(log_file, "a", newline="") as f:
-        csv.writer(f).writerow([
-            scenario_name, epoch,
-            train_result["train_loss"], train_result["train_acc"], train_result["train_precision"],
-            train_result["train_recall"], train_result["train_f1"],
-            test_result["test_loss"], test_result["test_acc"], test_result["test_precision"],
-            test_result["test_recall"], test_result["test_f1"],
-        ])
+LOG_COLUMNS = ["Epoch", "Train_Loss", "Train_Acc", "Test_Loss", "Test_Acc"]
 
 
 def _save_atomic(obj, path):
@@ -1118,9 +909,11 @@ def _save_atomic(obj, path):
 
 def run_training(*, scenario_name, epochs, step_fn, eval_net, testloader, criterion, optimizer,
                  scheduler, save_dir, log_file, best_ckpt_start_frac, device=device, export_state=None):
-    save_dir = Path(save_dir)
+    """Epoch loop shared by every trainer: step_fn(epoch) trains, evaluate1 scores the test set,
+    one CSV row per epoch, and the best test-accuracy state from epoch int(epochs * frac) on is
+    written to save_dir/best_epoch.pth after the last epoch (so its presence means completion)."""
+    save_dir, log_file = Path(save_dir), Path(log_file)
     save_dir.mkdir(parents=True, exist_ok=True)
-    log_file = Path(log_file)
     log_file.parent.mkdir(parents=True, exist_ok=True)
     with open(log_file, "w", newline="") as f:          # one log per model; a rerun starts it afresh
         csv.writer(f).writerow(LOG_COLUMNS)
@@ -1128,27 +921,23 @@ def run_training(*, scenario_name, epochs, step_fn, eval_net, testloader, criter
 
     best_test_acc, best_state = -1.0, None
     best_ckpt_from = int(epochs * best_ckpt_start_frac)
-    best_path = save_dir / BEST_CHECKPOINT
-    epoch = -1
     for epoch in range(epochs):
-        train_result = step_fn(epoch)
+        train = step_fn(epoch)
         if scheduler is not None:
             scheduler.step()
-        print(f"Epoch {epoch} | LR = {optimizer.param_groups[0]['lr']}")
-        test_result = evaluate1(eval_net, testloader, criterion, device)
-        _log_row(log_file, scenario_name, epoch, train_result, test_result)
-        if epoch >= best_ckpt_from and test_result["test_acc"] > best_test_acc:
-            best_test_acc = test_result["test_acc"]
+        test = evaluate1(eval_net, testloader, criterion, device)
+        print(f"Epoch {epoch} | LR = {optimizer.param_groups[0]['lr']} | train {train['train_acc']:.2f}% "
+              f"| test {test['test_acc']:.2f}%")
+        with open(log_file, "a", newline="") as f:
+            csv.writer(f).writerow([epoch, train["train_loss"], train["train_acc"], test["test_loss"], test["test_acc"]])
+        if epoch >= best_ckpt_from and test["test_acc"] > best_test_acc:
+            best_test_acc = test["test_acc"]
             best_state = {k: v.detach().cpu().clone() for k, v in export(eval_net).items()}
     if best_state is None:
         raise RuntimeError(f"{scenario_name}: no epoch fell in the best-checkpoint window (epochs={epochs})")
-    # both files are written after the last epoch, so best_epoch.pth exists only for a completed run
+    best_path = save_dir / BEST_CHECKPOINT
     _save_atomic(best_state, best_path)
-    _save_atomic(export(eval_net), save_dir / f"epoch_{epoch}.pth")
-    return {"best_test_acc": best_test_acc, "best_checkpoint": best_path,
-            "last_checkpoint": save_dir / f"epoch_{epoch}.pth"}
-
-
+    return {"best_test_acc": best_test_acc, "best_checkpoint": best_path}
 DEFAULT_SEEDS = {
     "victim": [VICTIM_SEED],
     "negative": list(range(42, 122)),      

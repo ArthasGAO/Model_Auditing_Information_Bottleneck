@@ -70,7 +70,7 @@ def train_base_model(stage, plan, plan_path, seed, rate, *, workers=4, epochs=No
 
     if measure_mi:
         util.set_seed(calculate_MI.SUBSET_SEED, deterministic=True)
-        calculate_MI.measure_checkpoint(stage, plan, best, ids, plan_path=plan_path)
+        calculate_MI.measure_checkpoint(stage, plan, best, ids)
     return save_dir
 
 

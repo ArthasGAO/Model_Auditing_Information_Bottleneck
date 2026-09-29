@@ -1,8 +1,5 @@
 import torch.nn as nn
 
-def dbg(tag, msg):
-    print(f"[DEBUG][{tag}] {msg}")
-
 # ==========================================
 # 1. Base Distiller Class
 # ==========================================
@@ -11,9 +8,6 @@ class Distiller(nn.Module):
         super(Distiller, self).__init__()
         self.student = student
         self.teacher = teacher
-
-        dbg("MODEL", f"Teacher model built: {self.teacher.__class__.__name__}")
-        dbg("MODEL", f"Student built: {self.student.__class__.__name__}")
 
     def train(self, mode=True):
         """
