@@ -1,6 +1,4 @@
-import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 def dbg(tag, msg):
     print(f"[DEBUG][{tag}] {msg}")
@@ -39,10 +37,7 @@ class Distiller(nn.Module):
 
     def forward_test(self, image):
         # Only use the student for testing/inference
-        out = self.student(image)
-        if isinstance(out, tuple):
-            return out[0]
-        return out
+        return self.student(image)
 
     def forward(self, **kwargs):
         if self.training:

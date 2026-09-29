@@ -1,0 +1,7 @@
+# Python 3.12. Versions are the ones the results were produced with; newer releases work.
+torch>=2.9
+torchvision>=0.24
+numpy>=2.2
+scipy>=1.16
+scikit-learn>=1.7
+pyyaml>=6.0

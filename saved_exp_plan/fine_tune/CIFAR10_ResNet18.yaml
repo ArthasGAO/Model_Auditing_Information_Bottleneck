@@ -1,0 +1,32 @@
+Victim_Scenario: CIFAR-10_ResNet-18_25000        # saved_models/victim/<Victim_Scenario>_42_1.0/best_epoch.pth
+Scenario_Name: CIFAR-10_ResNet-18_25000_Same_25000
+
+Dataset: &victim_data                            # how the victim was trained (defines group_A and the MI probe set)
+  name: CIFAR-10
+  root_dir: ./data
+  normalization: cifar10
+  img_size: 32
+  train_transforms:
+    - {name: RandomCrop, params: {size: 32, padding: 4}}
+    - {name: RandomHorizontalFlip, params: {p: 0.5}}
+    - {name: ToTensor}
+    - {name: Normalize}
+  test_transforms:
+    - {name: ToTensor}
+    - {name: Normalize}
+  group_size: 25000
+
+FT_Dataset:                                      # the attacker's data: group_B of the same dataset
+  <<: *victim_data
+  group_size: 25000                              # |group_B| -> "ftsize=" in the model name
+
+Model: ResNet-18
+
+Optimizers:
+  - {strategy: FT-LL, name: SGD, Epochs: 10, params: {lr: 0.01,  momentum: 0.9, weight_decay: 0.0005, nesterov: true}}
+  - {strategy: FT-AL, name: SGD, Epochs: 25, params: {lr: 0.001, momentum: 0.9, weight_decay: 0.0005, nesterov: true}}
+  - {strategy: RT-AL, name: SGD, Epochs: 50, params: {lr: 0.005, momentum: 0.9, weight_decay: 0.0005, nesterov: true}}
+
+Scheduler:
+  name: CosineAnnealingLR
+  params: {T_max: auto, eta_min: 1.0e-06}     # auto -> the strategy's Epochs

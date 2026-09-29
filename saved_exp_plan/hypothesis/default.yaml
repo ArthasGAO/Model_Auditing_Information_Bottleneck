@@ -1,0 +1,16 @@
+reference:
+  k: 20             # negatives forming the reference set (H0); one seeded shuffle of each case's pool,
+  seed: 0           # first k = reference, all remaining negatives are evaluated (pool needs >= k+1 models)
+
+grid:               # MI cells evaluated; in_size = rate x training size of the case
+  in_size_rates: [0.05, 0.10, 0.20, 0.50, 0.75, 1.00]
+  bins: [5, 10, 15, 20, 30, 50, 75, 100, 150, 200]
+  alphas: [0.05, 0.01]
+
+positives:          # stages to evaluate and how summary rows are grouped
+  fine_tune:    {group_by: [Scenario, strategy]}
+  prune:        {group_by: [Scenario, sparsity]}
+  distillation: {group_by: [Scenario, kd_method]}
+  extraction:   {group_by: [Scenario]}
+
+output_dir: saved_logs/hypothesis

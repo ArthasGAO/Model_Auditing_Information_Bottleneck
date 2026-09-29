@@ -7,38 +7,6 @@ from torch.utils.data import Subset
 
 
 class CIFAR100Dataset(Dataset):
-    """
-    CIFAR-100 wrapper that builds train/test/in-sample datasets with YAML-driven
-    transforms, plus raw_* datasets for adversarial training.
-
-    YAML-driven sets:
-      - train_set:           train data, train_transforms (aug + normalize)
-      - test_set:            test  data, test_transforms  (clean + normalize)
-      - in_sample_set:       train data, test_transforms  (clean probing)
-
-    Raw sets (for adversarial training and other [0,1]-pixel work):
-      - raw_train_set:       train data, RandomCrop+HFlip+ToTensor (no normalize)
-      - raw_train_clean_set: train data, ToTensor only (no aug, no normalize)
-      - raw_test_set:        test  data, ToTensor only (no aug, no normalize)
-
-    Why raw sets exist:
-      Adversarial attacks like PGD must operate on raw [0,1] pixels because
-      they clip against the input domain. If normalization is baked into the
-      pipeline, PGD's clipping breaks. Raw sets feed unnormalized images;
-      the model itself should wrap normalization (NormalizedModel pattern).
-
-    YAML transform spec format:
-      {
-        "name": "RandomCrop",
-        "params": {"size": 32, "padding": 4},
-        "enabled": True
-      }
-
-    NOTE:
-      Mixup/CutMix should NOT be defined here; apply it in the training
-      step or collate_fn.
-    """
-
     def __init__(
         self,
         normalization: str = "cifar100",
@@ -63,25 +31,12 @@ class CIFAR100Dataset(Dataset):
         self.train_transform = self._build_transform_pipeline(train_transforms, is_train=True)
         self.test_transform = self._build_transform_pipeline(test_transforms, is_train=False)
 
-        # Raw transforms for AT and other unnormalized workflows.
-        self.raw_transform = transforms.Compose([
-            transforms.ToTensor(),
-        ])
-        self.raw_train_transform = transforms.Compose([
-            transforms.RandomCrop(self.img_size, padding=4),
-            transforms.RandomHorizontalFlip(p=0.5),
-            transforms.ToTensor(),
-        ])
 
         # Normalized variants
         self.train_set = self._get_dataset(train=True, transform=self.train_transform)
         self.test_set = self._get_dataset(train=False, transform=self.test_transform)
         self.in_sample_set = self._get_dataset(train=True, transform=self.test_transform)
 
-        # Raw variants for AT and other [0,1]-pixel workflows.
-        self.raw_train_set = self._get_dataset(train=True, transform=self.raw_train_transform)
-        self.raw_train_clean_set = self._get_dataset(train=True, transform=self.raw_transform)
-        self.raw_test_set = self._get_dataset(train=False, transform=self.raw_transform)
 
     # ---------------------------
     # Normalization setup
@@ -150,10 +105,6 @@ class CIFAR100Dataset(Dataset):
         return transforms.Compose(steps)
 
     def _make_transform(self, name: str, params: Dict[str, Any]):
-        """
-        Map string name + params to a torchvision transform instance.
-        This is the only place you need to extend when adding new transforms.
-        """
         name = name.strip()
 
         # --- Geometric / basic ---
@@ -253,28 +204,12 @@ class CIFAR100Dataset(Dataset):
     # Subset selector
     # ---------------------------
     def subset(self, split: str, indices, clean: bool = False):
-        """
-        Create a torch.utils.data.Subset from one of the internal datasets.
-
-        split:
-          - "train":            train_set (aug+normalize) / in_sample_set if clean=True
-          - "test":             test_set
-          - "raw_train":        raw_train_set (aug, no normalize)
-          - "raw_train_clean":  raw_train_clean_set (no aug, no normalize)
-          - "raw_test":         raw_test_set
-        """
         split = split.lower().strip()
 
         if split == "train":
             base = self.in_sample_set if clean else self.train_set
         elif split == "test":
             base = self.test_set
-        elif split == "raw_train":
-            base = self.raw_train_set
-        elif split == "raw_train_clean":
-            base = self.raw_train_clean_set
-        elif split == "raw_test":
-            base = self.raw_test_set
         else:
             raise ValueError(f"Unknown split: {split}")
 

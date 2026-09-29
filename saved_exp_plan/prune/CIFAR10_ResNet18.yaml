@@ -1,0 +1,31 @@
+Victim_Scenario: CIFAR-10_ResNet-18_25000        # saved_models/victim/<Victim_Scenario>_42_1.0/best_epoch.pth
+Scenario_Name: CIFAR-10_ResNet-18_25000_Same_25000
+
+Dataset: &victim_data                            
+  name: CIFAR-10
+  root_dir: ./data
+  normalization: cifar10
+  img_size: 32
+  train_transforms:
+    - {name: RandomCrop, params: {size: 32, padding: 4}}
+    - {name: RandomHorizontalFlip, params: {p: 0.5}}
+    - {name: ToTensor}
+    - {name: Normalize}
+  test_transforms:
+    - {name: ToTensor}
+    - {name: Normalize}
+  group_size: 25000
+
+FT_Dataset:                                      
+  <<: *victim_data
+  group_size: 25000                             
+
+Model: ResNet-18
+
+Optimizers:
+  - {sparsity: 0.2, name: SGD, Epochs: 50, params: {lr: 0.001, momentum: 0.9, weight_decay: 0.0005, nesterov: true}}
+  - {sparsity: 0.8, name: SGD, Epochs: 50, params: {lr: 0.001, momentum: 0.9, weight_decay: 0.0005, nesterov: true}}
+
+Scheduler:
+  name: CosineAnnealingLR
+  params: {T_max: auto, eta_min: 1.0e-06}     # auto -> the entry's Epochs

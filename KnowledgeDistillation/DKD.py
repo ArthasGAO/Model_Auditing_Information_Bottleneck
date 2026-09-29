@@ -1,5 +1,4 @@
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 
 from KnowledgeDistillation.base_distiller import Distiller
@@ -72,9 +71,9 @@ class DKD(Distiller):
 
     def forward_train(self, image, target, **kwargs):
         # print("DKD metric distillation executing!")
-        logits_student, _ = self.student(image)
+        logits_student = self.student(image)
         with torch.no_grad():
-            logits_teacher, _ = self.teacher(image)
+            logits_teacher = self.teacher(image)
 
         # kwargs["epoch"] is required for DKD warmup schedule
         current_epoch = kwargs.get("epoch", 0) 

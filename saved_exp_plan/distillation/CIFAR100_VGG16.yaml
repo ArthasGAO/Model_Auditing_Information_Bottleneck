@@ -1,0 +1,43 @@
+# Distillation positives: the victim CIFAR-100_VGG16_25000 teaches a fresh student.
+#   python main_distillation.py --plans CIFAR100_VGG16 [--methods KD DKD] [--seeds 0 1 2]
+# The student is trained on group_B of the victim's dataset (disjoint from its group_A) with
+# one Distillation entry per method (KD: Hinton; DKD: decoupled KD). Teacher and student may
+# differ in architecture (ResNet-18 / VGG16); hypothesis_test.py tests the student against the
+# reference pool of ITS OWN architecture. The batch size is fixed at 256 in the entry point.
+
+Scenario_Name: CIFAR-100_VGG16toVGG16_25000
+Victim_Scenario: CIFAR-100_VGG16_25000           # the teacher: saved_models/victim/<Victim_Scenario>_42_1.0/best_epoch.pth
+
+Dataset:                                         # the victim's dataset (defines group_A / group_B and the MI probe set)
+  name: CIFAR-100
+  root_dir: ./data
+  normalization: cifar100
+  img_size: 32
+  train_transforms:
+    - {name: RandomCrop, params: {size: 32, padding: 4}}
+    - {name: RandomHorizontalFlip, params: {p: 0.5}}
+    - {name: ToTensor}
+    - {name: Normalize}
+  test_transforms:
+    - {name: ToTensor}
+    - {name: Normalize}
+  group_size: 25000
+
+Teacher_Model: {teacher_name: VGG16}             # the victim's architecture
+Student_Model: {student_name: VGG16}             # the suspect's architecture
+
+Optimizer:
+  name: SGD
+  params: {lr: 0.1, momentum: 0.9, weight_decay: 0.0005, nesterov: true}
+
+Scheduler:
+  name: CosineAnnealingLR
+  params: {T_max: auto, eta_min: 1.0e-06}     # auto -> Epochs
+
+Distillation:
+  - name: KD
+    params: {TEMPERATURE: 4, CE_WEIGHT: 0.1, KD_WEIGHT: 0.9}
+  - name: DKD
+    params: {CE_WEIGHT: 1.0, ALPHA: 1.0, BETA: 8.0, T: 4.0, WARMUP: 20}
+
+Epochs: 400
