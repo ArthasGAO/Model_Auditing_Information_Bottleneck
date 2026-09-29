@@ -1,3 +1,0 @@
-# Post-hoc AT source: DKD student, ResNet-18 -> ResNet-18 (seed 0)
-#   model: kd_final/CIFAR-10_ResNet-18to18_25000_DKD_0_0.0
-Scenario_Name: CIFAR-10_ResNet-18to18_25000_DKD
