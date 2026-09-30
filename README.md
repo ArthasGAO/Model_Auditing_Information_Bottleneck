@@ -25,7 +25,7 @@ A GPU is assumed; every command falls back to CPU.
 | `main_victim.py` | train the victim of a scenario on the split group_A |
 | `main_negative.py` | train independent negatives (reference pool) on the disjoint split group_B |
 | `main_fine_tune.py` | positives: FT-LL, FT-AL, RT-AL fine-tuning of the victim |
-| `main_prune.py` | positives: global L1 pruning (0.2, 0.8) + FT-AL recovery |
+| `main_prune.py` | positives: global L1 pruning (0.2, 0.6) + FT-AL recovery |
 | `main_distillation.py` | positives: KD and DKD students of the victim |
 | `main_extraction.py` | positives: Knockoff substitutes trained on the victim's soft labels |
 | `calculate_MI.py` | MI grid of any trained model; also called by every trainer after training |
