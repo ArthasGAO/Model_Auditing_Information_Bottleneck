@@ -83,7 +83,7 @@ it fills in only the missing cells.
   probe set; group_B is its disjoint complement and is what every negative and positive
   trains on. Both are cached under `Indices/<dataset>/` on first use.
 - **MI grid.** For a model, the logits on nested subsets of group_A of size
-  `rate × |group_A|` (rates 0.01 … 1.0) are soft-maxed, bucketised into `bins`
+  `rate × |group_A|` (rates 0.05 … 1.0) are soft-maxed, bucketised into `bins`
   (5 … 200) and I(X;T), I(T;Y) are estimated per cell: 70 cells per model, one row each.
 - **Test.** For each case the negatives found on disk form the pool. One seeded shuffle
   (`reference.seed`) puts the first `reference.k` models into the reference set; every
