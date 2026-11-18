@@ -1,4 +1,4 @@
-# Model Auditing with Information-Bottleneck Statistics
+# Model Auditing via Information Bottleneck Deterioration
 
 Does a suspect model derive from a victim model? This repository measures how much a
 model's output retains about the victim's training data, I(X;T) and I(T;Y) estimated on
